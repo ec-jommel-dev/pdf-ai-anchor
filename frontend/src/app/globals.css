@@ -1,0 +1,334 @@
+@import "tailwindcss";
+
+/* ============================================
+   Next.js Dev Tools - Hidden
+   ============================================ */
+
+.nextjs-toast,
+[data-nextjs-toast],
+#devtools-indicator {
+  display: none !important;
+}
+
+/* ============================================
+   PHASE 2: Theme Variables
+   Light (default) and Dark theme support
+   ============================================ */
+
+:root {
+  --bg-canvas: #ffffff;
+  --bg-sidebar: #f6f8fa;
+  --bg-card: #ffffff;
+  --border-default: #d0d7de;
+  --text-main: #1f2328;
+  --text-heading: #1f2328;
+  --gh-blue: #0969da;
+  --gh-green: #1a7f37;
+  --gh-green-hover: #166b2e;
+  --gh-red: #cf222e;
+  --btn-bg: #f6f8fa;
+  --btn-hover: #f3f4f6;
+  --input-bg: #ffffff;
+  --row-archived: rgba(175, 184, 193, 0.1);
+}
+
+[data-theme="dark"] {
+  --bg-canvas: #0d1117;
+  --bg-sidebar: #010409;
+  --bg-card: #0d1117;
+  --border-default: #30363d;
+  --text-main: #8b949e;
+  --text-heading: #c9d1d9;
+  --gh-blue: #58a6ff;
+  --gh-green: #238636;
+  --gh-green-hover: #2ea043;
+  --gh-red: #f85149;
+  --btn-bg: #21262d;
+  --btn-hover: #30363d;
+  --input-bg: #0d1117;
+  --row-archived: rgba(110, 118, 129, 0.15);
+}
+
+/* ============================================
+   Base Styles
+   ============================================ */
+
+* {
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, sans-serif;
+  transition: background 0.2s;
+}
+
+body {
+  margin: 0;
+  background-color: var(--bg-canvas);
+  color: var(--text-main);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ============================================
+   Table Styles
+   ============================================ */
+
+.table-card {
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  background: var(--bg-card);
+  overflow: hidden;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th {
+  text-align: left;
+  padding: 12px;
+  background: var(--bg-sidebar);
+  font-size: 12px;
+  color: var(--text-main);
+  border-bottom: 1px solid var(--border-default);
+}
+
+td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border-default);
+  font-size: 14px;
+}
+
+tr.is-archived {
+  background: var(--row-archived);
+}
+
+/* ============================================
+   Form Styles
+   ============================================ */
+
+.form-input {
+  width: 100%;
+  padding: 10px;
+  margin: 8px 0 16px;
+  background: var(--input-bg);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  color: var(--text-heading);
+  font-size: 14px;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--gh-blue);
+  box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.1);
+}
+
+/* ============================================
+   Upload Box Styles
+   ============================================ */
+
+.upload-box {
+  border: 2px dashed var(--border-default);
+  border-radius: 8px;
+  padding: 40px;
+  text-align: center;
+  cursor: pointer;
+  margin-top: 15px;
+  transition: all 0.2s;
+}
+
+.upload-box:hover {
+  border-color: var(--gh-blue);
+  background: rgba(9, 105, 218, 0.05);
+}
+
+/* ============================================
+   PDF Viewport Styles
+   ============================================ */
+
+.pdf-viewport {
+  width: 100%;
+  background: #525659;
+  border-radius: 6px;
+  padding: 20px;
+  display: flex;
+  justify-content: center;
+  overflow: auto;
+  min-height: 500px;
+  position: relative;
+}
+
+#canvas-wrapper {
+  position: relative;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  background: white;
+  line-height: 0;
+}
+
+canvas {
+  cursor: crosshair;
+  display: block;
+  max-width: 100%;
+}
+
+/* ============================================
+   Indicator Styles (Anchor Markers)
+   ============================================ */
+
+.coord-dot {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: var(--gh-red);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  border: 2px solid white;
+  z-index: 11;
+}
+
+.coord-label {
+  position: absolute;
+  background: var(--gh-red);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+  transform: translate(8px, -15px);
+  font-weight: bold;
+  pointer-events: none;
+  z-index: 12;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* ============================================
+   Code/Badge Inline Styles
+   ============================================ */
+
+code {
+  font-family: monospace;
+  background: var(--btn-hover);
+  padding: 2px 4px;
+  border-radius: 4px;
+  color: var(--gh-blue);
+}
+
+/* ============================================
+   Step Option Styles (Modal Options)
+   ============================================ */
+
+.step-option {
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: 0.2s;
+}
+
+.step-option:hover {
+  background: var(--btn-hover);
+  border-color: var(--gh-blue);
+}
+
+/* ============================================
+   Anchor Input Container
+   ============================================ */
+
+.anchor-input-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: var(--input-bg);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  margin: 8px 0 16px;
+  padding: 0 12px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.anchor-input-container:focus-within {
+  border-color: var(--gh-blue);
+  box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.1);
+}
+
+.anchor-bracket {
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  font-weight: 600;
+  color: var(--gh-blue);
+  font-size: 15px;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.anchor-input-container input.form-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  margin: 0;
+  padding: 10px 8px;
+  text-align: left;
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+}
+
+.anchor-input-container input.form-input:focus {
+  outline: none;
+  border: none;
+  box-shadow: none;
+}
+
+/* ============================================
+   Mobile Responsive Styles
+   ============================================ */
+
+@media (max-width: 768px) {
+  .desktop-only {
+    display: none !important;
+  }
+
+  /* Table to card layout */
+  thead {
+    display: none;
+  }
+
+  tr {
+    display: block;
+    border-bottom: 1px solid var(--border-default);
+    padding: 16px;
+  }
+
+  td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border: none;
+    padding: 6px 0;
+  }
+
+  td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    font-size: 12px;
+    color: #8b949e;
+  }
+
+  .action-cell {
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-start !important;
+    margin-top: 12px;
+    border-top: 1px solid var(--border-default);
+    padding-top: 12px !important;
+  }
+
+  .action-cell::before {
+    display: none;
+  }
+}

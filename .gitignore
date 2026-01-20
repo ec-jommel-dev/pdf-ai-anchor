@@ -1,0 +1,58 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+
+# Python
+backend/venv/
+backend/__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Environment files (contain secrets)
+.env
+.env.local
+.env.*.local
+backend/.env
+frontend/.env.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Next.js
+frontend/.next/
+frontend/out/
+frontend/.turbo/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# Uploaded files (optional - uncomment if you don't want to track uploads)
+# backend/uploads/*.pdf
+
+# Keep the uploads folder structure
+!backend/uploads/.gitkeep
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
