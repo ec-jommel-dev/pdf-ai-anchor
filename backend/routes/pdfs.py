@@ -150,7 +150,7 @@ def get_pdf_info(pdf_id):
 
 @pdfs_bp.route('/pdfs/<int:pdf_id>', methods=['PUT'])
 def update_pdf(pdf_id):
-    """Update PDF metadata (filename, canvas dimensions)"""
+    """Update PDF metadata (filename, canvas dimensions, status)"""
     provider_pdf = ProviderPDF.query.get_or_404(pdf_id)
     
     data = request.get_json()
@@ -161,6 +161,8 @@ def update_pdf(pdf_id):
         provider_pdf.canvas_width = data['canvasWidth']
     if 'canvasHeight' in data:
         provider_pdf.canvas_height = data['canvasHeight']
+    if 'isActive' in data:
+        provider_pdf.is_active = data['isActive']
     
     db.session.commit()
     

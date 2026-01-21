@@ -1,6 +1,6 @@
 /**
  * PHASE 5.3: Input Component
- * Styled form input with optional label
+ * Styled form input with optional label and error message
  */
 
 'use client';
@@ -10,10 +10,11 @@ import { cn } from '@/lib/utils';
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
+  error?: string | null;
 }
 
 const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className, label, id, ...props }, ref) => {
+  ({ className, label, id, error, ...props }, ref) => {
     return (
       <div className="w-full">
         {label && (
@@ -29,10 +30,14 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
           id={id}
           className={cn(
             'form-input',
+            error && 'border-[var(--gh-red)] focus:border-[var(--gh-red)]',
             className
           )}
           {...props}
         />
+        {error && (
+          <p className="text-xs text-[var(--gh-red)] mt-1">{error}</p>
+        )}
       </div>
     );
   }

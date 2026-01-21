@@ -113,8 +113,16 @@ export function ContractMapperSection() {
       await fetchProviders();
     } catch (error) {
       console.error('Upload error:', error);
-      setUploadError(error instanceof Error ? error.message : 'Failed to upload PDF');
-      showToast('Failed to upload PDF', 'error');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to upload PDF';
+      
+      // Check for duplicate PDF error (409)
+      if (errorMessage.includes('already') || errorMessage.includes('duplicate')) {
+        setUploadError(`⚠️ This PDF has already been uploaded for ${currentProvider?.name}. Please use a different file or check the existing PDFs in Provider Profile.`);
+        showToast('Duplicate PDF detected', 'error');
+      } else {
+        setUploadError(errorMessage);
+        showToast('Failed to upload PDF', 'error');
+      }
     } finally {
       setIsUploading(false);
     }
@@ -164,9 +172,10 @@ export function ContractMapperSection() {
     }
   }, [currentProviderId, viewProfile, handleReset]);
 
-  // Handle provider change
+  // Handle provider change - clear staged file to prevent wrong upload
   const handleProviderChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setCurrentProvider(e.target.value);
+    setStagedFile(null); // Clear staged file when provider changes
     setUploadError(null);
   };
 

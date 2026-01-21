@@ -5,27 +5,62 @@
 
 'use client';
 
-import { UploadCloud, Zap, FileText, Users, ArrowRight, Crosshair } from 'lucide-react';
+import { useState } from 'react';
+import { UploadCloud, Zap, FileText, Users, ArrowRight, Crosshair, Radio, Pin, RefreshCw } from 'lucide-react';
 import { useProviderStore } from '@/stores/useProviderStore';
+import { Button } from '@/components/ui/Button';
 
 export function DashboardSection() {
-  const { providers, setActiveTab, viewProfile, isLoading } = useProviderStore();
+  const { providers, setActiveTab, viewProfile, isLoading, fetchProviders, showToast } = useProviderStore();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await fetchProviders();
+      showToast('Data refreshed successfully!', 'success');
+    } catch {
+      showToast('Failed to refresh data', 'error');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
   
-  // Calculate stats
+  // Calculate stats - count only ACTIVE items for consistency
   const totalProviders = providers.length;
   const activeProviders = providers.filter(p => p.active).length;
-  const totalContracts = providers.reduce((sum, p) => sum + (p.pdfCount || p.pdfs?.length || 0), 0);
-  const totalAnchors = providers.reduce((sum, p) => sum + (p.anchors?.length || 0), 0);
+  
+  // Count only active PDFs
+  const activeContracts = providers.reduce((sum, p) => {
+    const activePdfs = p.pdfs?.filter(pdf => pdf.isActive) || [];
+    return sum + activePdfs.length;
+  }, 0);
+  
+  // Count anchors from active PDFs only
+  const totalAnchors = providers.reduce((sum, p) => {
+    const activePdfs = p.pdfs?.filter(pdf => pdf.isActive) || [];
+    return sum + activePdfs.reduce((pdfSum, pdf) => pdfSum + (pdf.anchorCount || 0), 0);
+  }, 0);
 
   return (
     <section className="max-w-[1000px] mx-auto">
       {/* Welcome Header */}
       <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
-          <Crosshair size={28} className="text-[var(--gh-green)]" />
-          <h1 className="text-2xl font-bold text-[var(--text-heading)] m-0">
-            PDF Anchor Mapper
-          </h1>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-3">
+            <Crosshair size={28} className="text-[var(--gh-green)]" />
+            <h1 className="text-2xl font-bold text-[var(--text-heading)] m-0">
+              PDF Anchor Mapper
+            </h1>
+          </div>
+          <Button 
+            onClick={handleRefresh} 
+            disabled={isRefreshing || isLoading}
+            title="Refresh data"
+          >
+            <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
+            {isRefreshing ? 'Refreshing...' : 'Refresh'}
+          </Button>
         </div>
         <p className="text-[var(--text-main)] text-sm">
           Map anchor strings to PDF contracts and auto-fill them with ease.
@@ -34,21 +69,49 @@ export function DashboardSection() {
 
       {/* Quick Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <div className="table-card p-4 text-center">
-          <div className="text-2xl font-bold text-[var(--gh-blue)]">{totalProviders}</div>
-          <div className="text-xs text-[#8b949e] mt-1">Total Providers</div>
+        <div className="table-card p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-[rgba(9,105,218,0.1)] flex items-center justify-center flex-shrink-0">
+              <Radio size={20} className="text-[var(--gh-blue)]" />
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-[var(--gh-blue)]">{totalProviders}</div>
+              <div className="text-xs text-[#8b949e]">Total Providers</div>
+            </div>
+          </div>
         </div>
-        <div className="table-card p-4 text-center">
-          <div className="text-2xl font-bold text-[var(--gh-green)]">{activeProviders}</div>
-          <div className="text-xs text-[#8b949e] mt-1">Active Providers</div>
+        <div className="table-card p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-[rgba(26,127,55,0.1)] flex items-center justify-center flex-shrink-0">
+              <Radio size={20} className="text-[var(--gh-green)]" />
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-[var(--gh-green)]">{activeProviders}</div>
+              <div className="text-xs text-[#8b949e]">Active Providers</div>
+            </div>
+          </div>
         </div>
-        <div className="table-card p-4 text-center">
-          <div className="text-2xl font-bold text-[var(--gh-purple)]">{totalContracts}</div>
-          <div className="text-xs text-[#8b949e] mt-1">Total Contracts</div>
+        <div className="table-card p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-[rgba(26,127,55,0.1)] flex items-center justify-center flex-shrink-0">
+              <FileText size={20} className="text-[var(--gh-green)]" />
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-[var(--gh-green)]">{activeContracts}</div>
+              <div className="text-xs text-[#8b949e]">Active Contracts</div>
+            </div>
+          </div>
         </div>
-        <div className="table-card p-4 text-center">
-          <div className="text-2xl font-bold text-[var(--gh-orange)]">{totalAnchors}</div>
-          <div className="text-xs text-[#8b949e] mt-1">Total Anchors</div>
+        <div className="table-card p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-[rgba(219,109,40,0.1)] flex items-center justify-center flex-shrink-0">
+              <Pin size={20} className="text-[var(--gh-orange)]" />
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-[var(--gh-orange)]">{totalAnchors}</div>
+              <div className="text-xs text-[#8b949e]">Total Anchors</div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -167,12 +230,21 @@ export function DashboardSection() {
                     </div>
                   </td>
                   <td>
-                    <button
-                      onClick={() => viewProfile(provider.id)}
-                      className="text-xs text-[var(--gh-blue)] hover:underline"
-                    >
-                      View →
-                    </button>
+                    {provider.active ? (
+                      <button
+                        onClick={() => viewProfile(provider.id)}
+                        className="text-xs text-[var(--gh-blue)] hover:underline"
+                      >
+                        View →
+                      </button>
+                    ) : (
+                      <span 
+                        className="text-xs text-[#8b949e] cursor-not-allowed"
+                        title="Activate provider to view"
+                      >
+                        View →
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}

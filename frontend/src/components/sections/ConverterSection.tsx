@@ -25,15 +25,20 @@ export function ConverterSection() {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Handle file selection
+  // Handle file selection - Only .docx supported (mammoth.js limitation)
   const handleFileSelect = useCallback((file: File) => {
-    const validTypes = [
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/msword'
-    ];
+    // Only .docx is reliably supported by mammoth.js
+    const isDocx = file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' 
+      || file.name.toLowerCase().endsWith('.docx');
     
-    if (!validTypes.includes(file.type) && !file.name.endsWith('.docx') && !file.name.endsWith('.doc')) {
-      setError('Please select a Word document (.docx or .doc)');
+    if (!isDocx) {
+      setError('Only .docx files are supported. Please convert .doc files to .docx first using Microsoft Word or Google Docs.');
+      return;
+    }
+    
+    // Check file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+      setError(`File too large. Maximum size is 10MB. Your file is ${(file.size / (1024 * 1024)).toFixed(1)}MB.`);
       return;
     }
     
@@ -243,7 +248,7 @@ export function ConverterSection() {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".docx,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
+              accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
               onChange={handleInputChange}
               className="hidden"
             />
@@ -256,7 +261,7 @@ export function ConverterSection() {
               or click to browse
             </p>
             <p className="text-xs text-[#8b949e]">
-              Supports .docx and .doc files
+              Supports .docx files only (max 10MB)
             </p>
           </div>
         )}
@@ -266,7 +271,7 @@ export function ConverterSection() {
       <div className="mt-6 p-4 bg-[var(--bg-sidebar)] border border-[var(--border-default)] rounded-md">
         <h4 className="text-sm font-semibold text-[var(--text-heading)] mb-2">How it works:</h4>
         <ol className="text-sm text-[var(--text-main)] space-y-1 list-decimal list-inside">
-          <li>Select or drag & drop a Word document (.docx or .doc)</li>
+          <li>Select or drag & drop a Word document (.docx only)</li>
           <li>Click "Convert & Download PDF" to start conversion</li>
           <li>Your PDF will automatically download when ready</li>
         </ol>

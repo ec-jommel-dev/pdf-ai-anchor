@@ -62,8 +62,8 @@ export interface APIProvider {
 // ============ PROVIDER API ============
 
 export const providerAPI = {
-  // Get all providers
-  getAll: () => fetchAPI<APIProvider[]>('/providers'),
+  // Get all providers (including inactive)
+  getAll: () => fetchAPI<APIProvider[]>('/providers?include_inactive=true'),
 
   // Get single provider with all PDFs and anchors
   getById: (id: string) => fetchAPI<APIProvider>(`/providers/${id}`),
@@ -141,8 +141,8 @@ export const pdfAPI = {
     return res.arrayBuffer();
   },
 
-  // Update PDF metadata
-  update: (pdfId: number, data: { filename?: string; canvasWidth?: number; canvasHeight?: number }) =>
+  // Update PDF metadata (including status)
+  update: (pdfId: number, data: { filename?: string; canvasWidth?: number; canvasHeight?: number; isActive?: boolean }) =>
     fetchAPI<APIPdf>(`/pdfs/${pdfId}`, {
       method: 'PUT',
       body: JSON.stringify(data),

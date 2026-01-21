@@ -1,11 +1,12 @@
 /**
  * PHASE 9.5: Confirm Delete Modal Component
- * Confirmation dialog before deleting an anchor
+ * Confirmation dialog before deleting items
+ * Updated: Support extra warning message for cascading deletes
  */
 
 'use client';
 
-import { Trash2 } from 'lucide-react';
+import { Trash2, AlertTriangle } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 
@@ -14,13 +15,15 @@ interface ConfirmDeleteModalProps {
   onClose: () => void;
   onConfirm: () => void;
   itemName?: string;
+  extraWarning?: string;
 }
 
 export function ConfirmDeleteModal({ 
   isOpen, 
   onClose, 
   onConfirm,
-  itemName = 'Anchor'
+  itemName = 'Anchor',
+  extraWarning
 }: ConfirmDeleteModalProps) {
   const handleConfirm = () => {
     onConfirm();
@@ -36,9 +39,16 @@ export function ConfirmDeleteModal({
           Delete {itemName}?
         </h3>
         
-        <p className="text-sm text-[#8b949e] mb-6">
+        <p className="text-sm text-[#8b949e] mb-4">
           This action cannot be undone.
         </p>
+
+        {extraWarning && (
+          <div className="flex items-start gap-2 p-3 mb-4 bg-[rgba(207,34,46,0.1)] border border-[var(--gh-red)] rounded-md text-left">
+            <AlertTriangle size={18} className="text-[var(--gh-red)] flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-[var(--gh-red)]">{extraWarning}</p>
+          </div>
+        )}
 
         <div className="flex flex-col gap-2.5">
           <Button 
@@ -52,7 +62,7 @@ export function ConfirmDeleteModal({
             onClick={onClose}
             className="justify-center py-2.5 w-full"
           >
-            Keep {itemName}
+            Cancel
           </Button>
         </div>
       </div>

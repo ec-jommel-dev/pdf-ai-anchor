@@ -16,6 +16,7 @@
 - Quick overview with stats (Providers, Contracts, Anchors)
 - Quick action cards for Contract Mapper and Auto Fill
 - Provider overview table with status and counts
+- **Refresh button** to reload data
 
 ### 📤 Contract Mapper
 - Upload PDF contracts and assign to providers
@@ -23,6 +24,7 @@
 - Click-to-place anchor markers on PDF pages
 - Live preview with zoom controls (50% - 250%)
 - Precise coordinate capture for text placement
+- **Confirmation before "Start Over"**
 
 ### ⚡ Auto-Fill Anchor
 - Select provider and **specific PDF template**
@@ -41,13 +43,24 @@
 ### 📋 Provider Management
 - Create, edit, and manage providers
 - Active/Inactive status management
+- **Search and filter providers**
 - View all PDFs and anchors per provider
 
 ### 📝 Word to PDF Converter
 - **100% Client-side** - Files never leave your browser
-- Convert .docx and .doc files to PDF
+- Convert .docx files to PDF
 - Drag & drop or click to upload
 - No API or database required
+
+### 🛡️ Human Error Protection
+- ✅ Form validation with error messages
+- ✅ File size limits (10MB max)
+- ✅ Confirmation dialogs for destructive actions
+- ✅ Loading states on all buttons
+- ✅ Disabled states for inactive items
+- ✅ Toast notifications (4 seconds)
+- ✅ Search/filter for providers
+- ✅ Duplicate PDF detection
 
 ---
 
@@ -207,9 +220,10 @@ pdf-ai-anchor/
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/providers/:id/pdfs` | List all PDFs for provider |
-| POST | `/api/providers/:id/pdfs` | Upload new PDF |
+| POST | `/api/providers/:id/pdfs` | Upload new PDF (409 if duplicate) |
 | GET | `/api/pdfs/:id` | Download PDF |
 | GET | `/api/pdfs/:id/info` | Get PDF metadata |
+| PUT | `/api/pdfs/:id` | Update PDF (status toggle) |
 | DELETE | `/api/pdfs/:id` | Delete PDF |
 
 ### Anchors (Belong to PDFs)
@@ -256,110 +270,19 @@ pdf-ai-anchor/
 
 ---
 
-## 📋 Database Schema
+## 🛡️ Human Error Protection
 
-```sql
--- Providers table
-CREATE TABLE providers (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    name VARCHAR(255) NOT NULL,
-    is_active TINYINT(1) DEFAULT 1,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-
--- Provider PDFs table (multiple per provider)
-CREATE TABLE provider_pdfs (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    provider_id INT NOT NULL,
-    filename VARCHAR(255) NOT NULL,
-    file_path VARCHAR(500) NOT NULL,
-    file_size INT,
-    total_pages INT,
-    canvas_width INT,
-    canvas_height INT,
-    content_hash VARCHAR(64),
-    is_active TINYINT(1) DEFAULT 1,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (provider_id) REFERENCES providers(id) ON DELETE CASCADE
-);
-
--- Anchor settings table (belong to PDFs)
-CREATE TABLE anchor_settings (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    pdf_id INT NOT NULL,
-    text VARCHAR(255) NOT NULL,
-    x INT NOT NULL,
-    y INT NOT NULL,
-    page VARCHAR(50) DEFAULT '1',
-    canvas_width INT,
-    canvas_height INT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (pdf_id) REFERENCES provider_pdfs(id) ON DELETE CASCADE
-);
-```
-
----
-
-## 🎨 Screenshots
-
-### Dashboard
-*Landing page with quick stats and actions*
-
-### Contract Mapper
-*Upload PDF and click to place anchor markers*
-
-### Anchor Settings
-*View and manage anchor positions with live preview*
-
-### Auto-Fill
-*Process PDFs with saved anchor settings (preview/clean modes)*
-
-### Word to PDF Converter
-*Client-side document conversion*
-
----
-
-## 🔧 Development
-
-### Run in Development Mode
-
-**Terminal 1 - Backend:**
-```bash
-cd backend
-source venv/bin/activate
-python app.py
-```
-
-**Terminal 2 - Frontend:**
-```bash
-cd frontend
-npm run dev
-```
-
-### Build for Production
-
-**Frontend:**
-```bash
-cd frontend
-npm run build
-npm start
-```
-
-**Backend:**
-```bash
-cd backend
-gunicorn app:app -b 0.0.0.0:5001
-```
-
----
-
-## 📝 Documentation
-
-- [Frontend Implementation Steps](frontend/IMPLEMENTATION_STEPS.md)
-- [Backend Implementation Steps](backend/AUTOFILL_AND_BACKEND_IMPLEMENTATION_STEPS.md)
-- [Future Plans & Enhancements](frontend/FUTURE_PLANS.md)
+| Feature | Description |
+|---------|-------------|
+| **Form Validation** | Required fields, format validation, error messages |
+| **File Size Limits** | 10MB max for PDFs and Word files |
+| **Confirmation Dialogs** | Before delete, deactivate, or reset |
+| **Loading States** | "Saving..." on buttons to prevent double-clicks |
+| **Disabled States** | View disabled for inactive providers |
+| **Search & Filter** | Find providers quickly |
+| **Toast Notifications** | 4 second duration with dismiss |
+| **Duplicate Detection** | Warns if PDF already uploaded |
+| **Refresh Button** | Reload data from server |
 
 ---
 
@@ -372,7 +295,17 @@ gunicorn app:app -b 0.0.0.0:5001
 - ✅ **PDF Template Selection** - Choose which PDF to use in Auto-Fill
 - ✅ **Word to PDF Converter** - Client-side document conversion
 - ✅ **Preview/Clean Modes** - Red text for verification, white for signing
-- ✅ **New Icons** - Crosshair logo, Radio icon for providers
+- ✅ **Human Error Protection** - Validation, confirmations, loading states
+- ✅ **Search & Filter** - Find providers quickly
+- ✅ **Refresh Button** - Reload stale data
+
+---
+
+## 📝 Documentation
+
+- [Frontend Implementation Steps](frontend/IMPLEMENTATION_STEPS.md)
+- [Backend Implementation Steps](backend/AUTOFILL_AND_BACKEND_IMPLEMENTATION_STEPS.md)
+- [Future Plans & Enhancements](frontend/FUTURE_PLANS.md)
 
 ---
 

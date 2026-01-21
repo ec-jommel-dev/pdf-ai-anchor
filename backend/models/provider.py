@@ -19,21 +19,22 @@ class Provider(db.Model):
     
     def to_dict(self, include_pdfs=True):
         """Convert provider to dictionary for JSON response"""
+        active_pdfs = [pdf for pdf in self.pdfs if pdf.is_active] if self.pdfs else []
+        
         data = {
             'id': str(self.id),
             'name': self.name,
             'active': self.is_active,
-            'pdfCount': len(self.pdfs) if self.pdfs else 0
+            'pdfCount': len(active_pdfs)  # Count only active PDFs
         }
         
         if include_pdfs:
-            # Include PDFs with their anchors
-            data['pdfs'] = [pdf.to_dict() for pdf in self.pdfs if pdf.is_active]
-            # Flatten all anchors for backward compatibility
+            # Include ALL PDFs (active and inactive) for management
+            data['pdfs'] = [pdf.to_dict() for pdf in self.pdfs]
+            # Flatten anchors from ACTIVE PDFs only for backward compatibility
             all_anchors = []
-            for pdf in self.pdfs:
-                if pdf.is_active:
-                    all_anchors.extend([a.to_dict() for a in pdf.anchors])
+            for pdf in active_pdfs:
+                all_anchors.extend([a.to_dict() for a in pdf.anchors])
             data['anchors'] = all_anchors
         
         return data

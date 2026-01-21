@@ -6,8 +6,9 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, RefreshCw, Check } from 'lucide-react';
+import { ChevronLeft, ChevronRight, RefreshCw, Check, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
 import { IndicatorLayer } from './IndicatorLayer';
 import { Anchor } from '@/types';
 
@@ -44,6 +45,7 @@ export function PDFViewer({
   const [canvasDimensions, setCanvasDimensions] = useState({ width: 0, height: 0 });
   const [displayDimensions, setDisplayDimensions] = useState({ width: 0, height: 0 });
   const [isLoading, setIsLoading] = useState(true);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const renderTaskRef = useRef<any>(null);
 
@@ -198,7 +200,7 @@ export function PDFViewer({
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-semibold text-[var(--text-heading)] m-0">Interactive Mapper</h2>
         <div className="flex gap-2.5">
-          <Button onClick={onReset}>
+          <Button onClick={() => setShowResetConfirm(true)}>
             <RefreshCw size={14} /> Start Over
           </Button>
           <Button variant="primary" onClick={onFinish}>
@@ -252,6 +254,42 @@ export function PDFViewer({
           />
         </div>
       </div>
+
+      {/* Reset Confirmation Modal */}
+      <Modal isOpen={showResetConfirm} onClose={() => setShowResetConfirm(false)}>
+        <div className="text-center">
+          <AlertTriangle size={40} className="text-[var(--gh-yellow)] mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-[var(--text-heading)] mb-2">
+            Start Over?
+          </h3>
+          <p className="text-sm text-[#8b949e] mb-4">
+            This will close the current PDF and return to the upload screen.
+            {anchors.length > 0 && (
+              <span className="block mt-2 text-[var(--gh-green)]">
+                ✓ Your {anchors.length} saved anchor(s) are safe in the database.
+              </span>
+            )}
+          </p>
+          <div className="flex flex-col gap-2.5">
+            <Button 
+              onClick={() => {
+                setShowResetConfirm(false);
+                onReset();
+              }}
+              className="justify-center py-2.5 w-full"
+            >
+              Yes, Start Over
+            </Button>
+            <Button 
+              variant="primary"
+              onClick={() => setShowResetConfirm(false)}
+              className="justify-center py-2.5 w-full"
+            >
+              Continue Mapping
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 /**
  * Toast Notification Component
- * Shows success/error messages that auto-fade after 2 seconds
+ * Shows success/error messages that auto-fade after 4 seconds
  */
 
 'use client';
@@ -16,7 +16,7 @@ interface ToastProps {
   duration?: number;
 }
 
-export function Toast({ message, type = 'success', isVisible, onClose, duration = 3000 }: ToastProps) {
+export function Toast({ message, type = 'success', isVisible, onClose, duration = 4000 }: ToastProps) {
   const [isShowing, setIsShowing] = useState(false);
 
   useEffect(() => {

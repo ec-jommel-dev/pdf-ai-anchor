@@ -57,6 +57,13 @@ export function AnchorModal({
   const [y, setY] = useState(initialY);
   const [pageType, setPageType] = useState<string>('specific');
   const [specificPages, setSpecificPages] = useState('1');
+  const [isSaving, setIsSaving] = useState(false);
+  const [errors, setErrors] = useState<{
+    anchorKey?: string;
+    x?: string;
+    y?: string;
+    pages?: string;
+  }>({});
   
   // Preview state
   const [showPreview, setShowPreview] = useState(false);
@@ -229,7 +236,42 @@ export function AnchorModal({
   };
 
   const handleSave = async () => {
-    if (!anchorKey.trim()) return;
+    // Validate all fields
+    const newErrors: typeof errors = {};
+    
+    if (!anchorKey.trim()) {
+      newErrors.anchorKey = 'Anchor key is required';
+    }
+    
+    if (x < 0) {
+      newErrors.x = 'X must be positive';
+    } else if (x > 10000) {
+      newErrors.x = 'X is too large';
+    }
+    
+    if (y < 0) {
+      newErrors.y = 'Y must be positive';
+    } else if (y > 10000) {
+      newErrors.y = 'Y is too large';
+    }
+    
+    if (pageType === 'specific') {
+      // Validate specific pages format (e.g., "1", "1,2,3", "1-5")
+      const pagesPattern = /^(\d+(-\d+)?)(,\s*\d+(-\d+)?)*$/;
+      if (!specificPages.trim()) {
+        newErrors.pages = 'Page number is required';
+      } else if (!pagesPattern.test(specificPages.trim())) {
+        newErrors.pages = 'Invalid format. Use: 1 or 1,2,3 or 1-5';
+      }
+    }
+    
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+    
+    setErrors({});
+    setIsSaving(true);
 
     const pageValue = pageType === 'specific' ? specificPages : pageType;
 
@@ -256,6 +298,8 @@ export function AnchorModal({
       handleClose();
     } catch {
       // Error already handled by store
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -268,6 +312,8 @@ export function AnchorModal({
     setShowPreview(false);
     setPreviewError(null);
     setZoom(1.0);
+    setErrors({});
+    setIsSaving(false);
     onClose();
   };
 
@@ -290,17 +336,23 @@ export function AnchorModal({
             <label className="block text-xs font-semibold text-[var(--text-main)] mb-1">
               Anchor Key (e.g. day)
             </label>
-            <div className="anchor-input-container">
+            <div className={`anchor-input-container ${errors.anchorKey ? 'border-[var(--gh-red)]' : ''}`}>
               <span className="anchor-bracket">{'{{'}</span>
               <input
                 type="text"
                 className="form-input"
                 placeholder="day"
                 value={anchorKey}
-                onChange={(e) => handleKeyChange(e.target.value)}
+                onChange={(e) => {
+                  handleKeyChange(e.target.value);
+                  if (errors.anchorKey) setErrors(prev => ({ ...prev, anchorKey: undefined }));
+                }}
               />
               <span className="anchor-bracket">{'}}'}</span>
             </div>
+            {errors.anchorKey && (
+              <p className="text-xs text-[var(--gh-red)] mt-1">{errors.anchorKey}</p>
+            )}
           </div>
 
           {/* Coordinates */}
@@ -309,13 +361,23 @@ export function AnchorModal({
               label="X-Coordinate"
               type="number"
               value={x}
-              onChange={(e) => setX(parseInt(e.target.value) || 0)}
+              onChange={(e) => {
+                setX(parseInt(e.target.value) || 0);
+                if (errors.x) setErrors(prev => ({ ...prev, x: undefined }));
+              }}
+              error={errors.x}
+              min={0}
             />
             <Input
               label="Y-Coordinate"
               type="number"
               value={y}
-              onChange={(e) => setY(parseInt(e.target.value) || 0)}
+              onChange={(e) => {
+                setY(parseInt(e.target.value) || 0);
+                if (errors.y) setErrors(prev => ({ ...prev, y: undefined }));
+              }}
+              error={errors.y}
+              min={0}
             />
           </div>
 
@@ -330,10 +392,14 @@ export function AnchorModal({
           {/* Specific Pages Input */}
           {pageType === 'specific' && (
             <Input
-              label="Enter Pages (e.g. 1, 2, 5)"
+              label={`Enter Pages (1-${pdfTotalPages || '?'})`}
               placeholder="1, 2, 6, 7"
               value={specificPages}
-              onChange={(e) => setSpecificPages(e.target.value)}
+              onChange={(e) => {
+                setSpecificPages(e.target.value);
+                if (errors.pages) setErrors(prev => ({ ...prev, pages: undefined }));
+              }}
+              error={errors.pages}
             />
           )}
 
@@ -473,8 +539,10 @@ export function AnchorModal({
       </div>
 
       <div className="flex justify-end gap-2.5 mt-4">
-        <Button onClick={handleClose}>Cancel</Button>
-        <Button variant="primary" onClick={handleSave}>Save Anchor</Button>
+        <Button onClick={handleClose} disabled={isSaving}>Cancel</Button>
+        <Button variant="primary" onClick={handleSave} disabled={isSaving}>
+          {isSaving ? 'Saving...' : 'Save Anchor'}
+        </Button>
       </div>
     </Modal>
   );

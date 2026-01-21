@@ -1,6 +1,21 @@
-# EnergyAnchor - Future Plans & Enhancements
+# PDF Anchor Mapper - Future Plans & Enhancements
 
 **Author & Developer:** Jommel Hinayon
+
+---
+
+## ✅ Recently Completed
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| **Search Providers** | Filter providers by name in the list | ✅ Done |
+| **Dashboard** | Stats like providers, contracts, anchors | ✅ Done |
+| **Form Validation** | Required fields with error messages | ✅ Done |
+| **Confirmation Dialogs** | Before delete/deactivate actions | ✅ Done |
+| **Loading States** | "Saving..." on buttons | ✅ Done |
+| **File Size Limits** | 10MB max for uploads | ✅ Done |
+| **Toast Duration** | Increased to 4 seconds | ✅ Done |
+| **Refresh Button** | Reload stale data | ✅ Done |
 
 ---
 
@@ -10,7 +25,6 @@
 |---------|-------------|----------|
 | **Duplicate Anchor** | "Copy" button on anchor row to quickly create similar anchors | ⭐⭐⭐ |
 | **Bulk Delete** | Checkbox selection + "Delete Selected" for anchors | ⭐⭐⭐ |
-| **Search Providers** | Filter providers by name in the list | ⭐⭐⭐ |
 | **Keyboard Shortcuts** | `Esc` to close modals, `Enter` to save | ⭐⭐ |
 | **Empty State Graphics** | Nice illustrations when no providers/anchors exist | ⭐⭐ |
 
@@ -36,7 +50,6 @@
 | **Audit Log** | Track who changed what and when | ⭐⭐ |
 | **Batch Processing** | Upload multiple PDFs at once for auto-fill | ⭐⭐⭐ |
 | **PDF History** | Keep versions of uploaded PDFs | ⭐ |
-| **Dashboard** | Stats like "10 providers, 45 anchors, 23 PDFs processed" | ⭐⭐ |
 
 ---
 
@@ -61,15 +74,7 @@
 - Opens AnchorModal with pre-filled values
 - User just changes the key name
 
-### 2. Search Providers ⭐⭐⭐
-**Why:** Essential when you have 20+ providers
-**Effort:** ~1 hour
-**Implementation:**
-- Add search input above provider table
-- Filter providers by name (case-insensitive)
-- Show "No results" message if empty
-
-### 3. Export/Import Settings ⭐⭐⭐
+### 2. Export/Import Settings ⭐⭐⭐
 **Why:** Backup/restore or share configs between environments
 **Effort:** ~2 hours
 **Implementation:**
@@ -77,7 +82,7 @@
 - Import: Upload JSON, validate, create providers/anchors
 - Backend endpoints needed
 
-### 4. Zoom in Contract Mapper ⭐⭐⭐
+### 3. Zoom in Contract Mapper ⭐⭐⭐
 **Why:** Precise anchor placement on detailed PDFs
 **Effort:** ~2 hours
 **Implementation:**
@@ -85,7 +90,7 @@
 - Add to PDFViewer component
 - Handle scroll position on zoom
 
-### 5. Batch Auto-Fill ⭐⭐⭐
+### 4. Batch Auto-Fill ⭐⭐⭐
 **Why:** Process multiple contracts at once
 **Effort:** ~3 hours
 **Implementation:**
@@ -99,7 +104,6 @@
 
 ### Phase 1: Quick Wins
 - [ ] Duplicate Anchor button
-- [ ] Search/filter providers
 - [ ] Keyboard shortcuts (Esc, Enter)
 - [ ] Empty state illustrations
 
@@ -112,7 +116,6 @@
 ### Phase 3: Advanced Features
 - [ ] User authentication (login/register)
 - [ ] Batch PDF processing
-- [ ] Dashboard with statistics
 - [ ] Audit log
 
 ### Phase 4: Polish
@@ -141,7 +144,6 @@
 
 ### Week 1-2: Quick Wins
 - Duplicate anchor
-- Search providers
 - Keyboard shortcuts
 
 ### Week 3-4: Core Features
@@ -156,7 +158,6 @@
 
 ### Month 3: Advanced
 - Batch processing
-- Dashboard
 - Audit log
 
 ---

@@ -44,7 +44,16 @@ export function AutoFillSection() {
   const { getActiveProviders, currentProviderId, setCurrentProvider, getProviderById } = useProviderStore();
 
   const activeProviders = getActiveProviders();
-  const providerOptions = activeProviders.map((p) => ({
+  
+  // Filter providers to only those with at least one ACTIVE PDF
+  const providersWithActivePdfs = useMemo(() => {
+    return activeProviders.filter(p => {
+      const activePdfs = p.pdfs?.filter(pdf => pdf.isActive) || [];
+      return activePdfs.length > 0;
+    });
+  }, [activeProviders]);
+
+  const providerOptions = providersWithActivePdfs.map((p) => ({
     value: p.id,
     label: p.name
   }));
@@ -52,23 +61,28 @@ export function AutoFillSection() {
   // Get current provider with PDFs
   const currentProvider = currentProviderId ? getProviderById(currentProviderId) : null;
   
+  // Get only ACTIVE PDFs for the current provider
+  const activePdfs = useMemo(() => {
+    if (!currentProvider) return [];
+    return currentProvider.pdfs.filter(pdf => pdf.isActive);
+  }, [currentProvider]);
+  
   // Get selected PDF's anchors
   const selectedPdf = useMemo(() => {
     if (!currentProvider || !selectedPdfId) return null;
-    return currentProvider.pdfs.find(p => p.id === selectedPdfId);
+    return currentProvider.pdfs.find(p => p.id === selectedPdfId && p.isActive);
   }, [currentProvider, selectedPdfId]);
   
   const selectedAnchors = selectedPdf?.anchors || [];
   const hasAnchors = selectedAnchors.length > 0;
 
-  // PDF options for dropdown
+  // PDF options for dropdown - only ACTIVE PDFs
   const pdfOptions = useMemo(() => {
-    if (!currentProvider) return [];
-    return currentProvider.pdfs.map(pdf => ({
+    return activePdfs.map(pdf => ({
       value: String(pdf.id),
       label: `${pdf.filename} (${pdf.anchorCount} anchors)`
     }));
-  }, [currentProvider]);
+  }, [activePdfs]);
 
   // Handle provider change
   const handleProviderChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -89,7 +103,12 @@ export function AutoFillSection() {
 
   // Validate before upload - show warning modal if issues
   const handleBeforeUpload = useCallback(() => {
-    if (!currentProviderId || activeProviders.length === 0) {
+    if (providersWithActivePdfs.length === 0) {
+      setWarningMessage('No providers with active PDF templates available. Please activate a PDF in Provider settings or upload a new one in Contract Mapper.');
+      setShowWarningModal(true);
+      return false;
+    }
+    if (!currentProviderId) {
       setWarningMessage('Please select a provider first before uploading a PDF contract.');
       setShowWarningModal(true);
       return false;
@@ -105,7 +124,7 @@ export function AutoFillSection() {
       return false;
     }
     return true;
-  }, [currentProviderId, activeProviders.length, selectedPdfId, hasAnchors]);
+  }, [providersWithActivePdfs.length, currentProviderId, selectedPdfId, hasAnchors]);
 
   // Handle file selection - just stage the file, don't process yet
   const handleFileSelect = useCallback((file: File) => {
@@ -190,17 +209,26 @@ export function AutoFillSection() {
       </div>
 
       <div className="table-card p-6">
-        {/* Provider Selection */}
+        {/* No Providers with Active PDFs Warning */}
+        {providersWithActivePdfs.length === 0 && activeProviders.length > 0 && (
+          <div className="flex items-center gap-2 p-3 mb-4 bg-[rgba(219,109,40,0.1)] border border-[var(--gh-orange)] rounded-md text-[var(--gh-orange)] text-sm">
+            <AlertCircle size={16} />
+            All providers have inactive PDF templates. Please activate a PDF or upload a new one in Contract Mapper.
+          </div>
+        )}
+
+        {/* Provider Selection - Only shows providers with active PDFs */}
         <Select
           label="Select Provider"
-          placeholder="-- Select Provider --"
+          placeholder={providersWithActivePdfs.length === 0 ? "-- No providers with active PDFs --" : "-- Select Provider --"}
           options={providerOptions}
           value={currentProviderId || ''}
           onChange={handleProviderChange}
+          disabled={providersWithActivePdfs.length === 0}
         />
 
-        {/* PDF Template Selection (if provider has PDFs) */}
-        {currentProvider && currentProvider.pdfs.length > 0 && (
+        {/* PDF Template Selection (if provider has active PDFs) */}
+        {currentProvider && activePdfs.length > 0 && (
           <Select
             label="Select PDF Template"
             placeholder="-- Select PDF with anchors --"
@@ -210,10 +238,10 @@ export function AutoFillSection() {
           />
         )}
 
-        {/* No PDFs Message */}
-        {currentProvider && currentProvider.pdfs.length === 0 && (
+        {/* No Active PDFs Message */}
+        {currentProvider && activePdfs.length === 0 && (
           <div className="mt-2 mb-4 text-sm text-[var(--gh-red)]">
-            ⚠ This provider has no PDF templates. Upload a contract in Contract Mapper first.
+            ⚠ This provider has no active PDF templates. Activate a PDF in Provider settings or upload a new contract in Contract Mapper.
           </div>
         )}
 
