@@ -5,7 +5,7 @@
  */
 
 import { create } from 'zustand';
-import { Provider, Anchor, TabType, ModalType } from '@/types';
+import { Provider, Anchor, TabType, ModalType, ProviderPDF } from '@/types';
 import { providerAPI, anchorAPI } from '@/lib/api';
 
 // Initial state - empty providers (loaded from API)
@@ -48,6 +48,7 @@ interface ProviderStore {
   // State
   providers: Provider[];
   currentProviderId: string | null;
+  currentPdfId: number | null;  // Selected PDF for anchor operations
   activeTab: TabType;
   openModal: ModalType;
   editingAnchorId: number | null;
@@ -68,11 +69,16 @@ interface ProviderStore {
   getProviderById: (id: string) => Provider | undefined;
   getCurrentProvider: () => Provider | undefined;
 
-  // Anchor Actions (async - connected to API)
-  addAnchor: (providerId: string, anchor: Omit<Anchor, 'id'>) => Promise<void>;
-  updateAnchor: (providerId: string, anchorId: number, data: Partial<Anchor>) => Promise<void>;
-  deleteAnchor: (providerId: string, anchorId: number) => Promise<void>;
-  getAnchorById: (providerId: string, anchorId: number) => Anchor | undefined;
+  // Anchor Actions (async - connected to API, now use pdfId)
+  addAnchor: (pdfId: number, anchor: Omit<Anchor, 'id'>) => Promise<void>;
+  updateAnchor: (anchorId: number, data: Partial<Anchor>) => Promise<void>;
+  deleteAnchor: (anchorId: number) => Promise<void>;
+  getAnchorById: (anchorId: number) => Anchor | undefined;
+  
+  // PDF Selection Actions
+  setCurrentPdfId: (id: number | null) => void;
+  getCurrentPdf: () => ProviderPDF | undefined;
+  getCurrentPdfAnchors: () => Anchor[];
 
   // Navigation Actions
   setActiveTab: (tab: TabType) => void;
@@ -102,7 +108,8 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
   // Initial State (defaults - data loaded from API after hydration)
   providers: initialProviders,
   currentProviderId: null,
-  activeTab: 'upload',
+  currentPdfId: null,
+  activeTab: 'dashboard',
   openModal: null,
   editingAnchorId: null,
   deleteTargetId: null,
@@ -199,22 +206,30 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
     return providers.find((p) => p.id === currentProviderId);
   },
 
-  // Anchor Actions (connected to API)
-  addAnchor: async (providerId: string, anchor: Omit<Anchor, 'id'>) => {
-    const { canvasDimensions } = get();
+  // Anchor Actions (connected to API - now use pdfId)
+  addAnchor: async (pdfId: number, anchor: Omit<Anchor, 'id'>) => {
+    const { canvasDimensions, currentProviderId } = get();
     const anchorData = {
       ...anchor,
       canvasWidth: canvasDimensions.width || anchor.canvasWidth,
       canvasHeight: canvasDimensions.height || anchor.canvasHeight
     };
     try {
-      const newAnchor = await anchorAPI.create(providerId, anchorData);
+      const newAnchor = await anchorAPI.create(pdfId, anchorData);
+      // Update the provider's PDF anchors in state
       set((state) => ({
-        providers: state.providers.map((p) =>
-          p.id === providerId
-            ? { ...p, anchors: [...p.anchors, newAnchor] }
-            : p
-        )
+        providers: state.providers.map((p) => {
+          if (p.id !== currentProviderId) return p;
+          return {
+            ...p,
+            anchors: [...p.anchors, newAnchor],
+            pdfs: p.pdfs.map((pdf) =>
+              pdf.id === pdfId
+                ? { ...pdf, anchors: [...pdf.anchors, newAnchor], anchorCount: pdf.anchorCount + 1 }
+                : pdf
+            )
+          };
+        })
       }));
     } catch (error) {
       console.error('Failed to add anchor:', error);
@@ -223,20 +238,18 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
     }
   },
 
-  updateAnchor: async (providerId: string, anchorId: number, data: Partial<Anchor>) => {
+  updateAnchor: async (anchorId: number, data: Partial<Anchor>) => {
     try {
-      await anchorAPI.update(providerId, anchorId, data);
+      await anchorAPI.update(anchorId, data);
       set((state) => ({
-        providers: state.providers.map((p) =>
-          p.id === providerId
-            ? {
-                ...p,
-                anchors: p.anchors.map((a) =>
-                  a.id === anchorId ? { ...a, ...data } : a
-                )
-              }
-            : p
-        )
+        providers: state.providers.map((p) => ({
+          ...p,
+          anchors: p.anchors.map((a) => a.id === anchorId ? { ...a, ...data } : a),
+          pdfs: p.pdfs.map((pdf) => ({
+            ...pdf,
+            anchors: pdf.anchors.map((a) => a.id === anchorId ? { ...a, ...data } : a)
+          }))
+        }))
       }));
     } catch (error) {
       console.error('Failed to update anchor:', error);
@@ -245,15 +258,19 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
     }
   },
 
-  deleteAnchor: async (providerId: string, anchorId: number) => {
+  deleteAnchor: async (anchorId: number) => {
     try {
-      await anchorAPI.delete(providerId, anchorId);
+      await anchorAPI.delete(anchorId);
       set((state) => ({
-        providers: state.providers.map((p) =>
-          p.id === providerId
-            ? { ...p, anchors: p.anchors.filter((a) => a.id !== anchorId) }
-            : p
-        )
+        providers: state.providers.map((p) => ({
+          ...p,
+          anchors: p.anchors.filter((a) => a.id !== anchorId),
+          pdfs: p.pdfs.map((pdf) => ({
+            ...pdf,
+            anchors: pdf.anchors.filter((a) => a.id !== anchorId),
+            anchorCount: pdf.anchors.filter((a) => a.id !== anchorId).length
+          }))
+        }))
       }));
     } catch (error) {
       console.error('Failed to delete anchor:', error);
@@ -262,9 +279,30 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
     }
   },
 
-  getAnchorById: (providerId: string, anchorId: number) => {
-    const provider = get().providers.find((p) => p.id === providerId);
-    return provider?.anchors.find((a) => a.id === anchorId);
+  getAnchorById: (anchorId: number) => {
+    const { providers } = get();
+    for (const p of providers) {
+      const anchor = p.anchors.find((a) => a.id === anchorId);
+      if (anchor) return anchor;
+    }
+    return undefined;
+  },
+  
+  // PDF Selection Actions
+  setCurrentPdfId: (id: number | null) => {
+    set({ currentPdfId: id });
+  },
+  
+  getCurrentPdf: () => {
+    const { currentProviderId, currentPdfId, providers } = get();
+    if (!currentProviderId || !currentPdfId) return undefined;
+    const provider = providers.find((p) => p.id === currentProviderId);
+    return provider?.pdfs.find((pdf) => pdf.id === currentPdfId);
+  },
+  
+  getCurrentPdfAnchors: () => {
+    const pdf = get().getCurrentPdf();
+    return pdf?.anchors || [];
   },
 
   // Navigation Actions (with localStorage persistence for tab only)
@@ -324,7 +362,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
 
   // Hydration - load navigation state from localStorage AND providers from API
   hydrateFromStorage: async () => {
-    const savedTab = getFromStorage<TabType>(STORAGE_KEYS.ACTIVE_TAB, 'upload');
+    const savedTab = getFromStorage<TabType>(STORAGE_KEYS.ACTIVE_TAB, 'dashboard');
     // Don't restore currentProviderId - user must select fresh each time
     // This prevents accidental operations on wrong provider
     set({ 

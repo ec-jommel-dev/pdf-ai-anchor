@@ -1,27 +1,27 @@
 /**
  * PHASE 8.2: Auto Fill Section
  * Upload PDF to apply saved anchor coordinates automatically
+ * Updated: Supports selecting specific PDF template per provider
  * 
  * FLOW:
- * 1. User selects provider (must have anchor settings)
- * 2. User selects PDF file → Shows confirmation
- * 3. User clicks "Process" to confirm
- * 4. Backend places anchor text at coordinates
- * 5. Returns new PDF → Auto-download
+ * 1. User selects provider
+ * 2. User selects PDF template (if provider has multiple PDFs)
+ * 3. User selects PDF file → Shows confirmation
+ * 4. User clicks "Process" to confirm
+ * 5. Backend places anchor text at coordinates
+ * 6. Returns new PDF → Auto-download
  */
 
 'use client';
 
-import { useState, useCallback } from 'react';
-import { Loader2, Download, AlertCircle, FileText, X, Zap, Eye } from 'lucide-react';
+import { useState, useCallback, useMemo } from 'react';
+import { Loader2, Download, AlertCircle, FileText, X, Eye } from 'lucide-react';
 import { Select } from '@/components/ui/Select';
 import { PDFUploadBox } from '@/components/pdf/PDFUploadBox';
 import { Button } from '@/components/ui/Button';
 import { WarningModal } from '@/components/modals/WarningModal';
 import { useProviderStore } from '@/stores/useProviderStore';
-
-// Backend API URL - defaults to localhost:5001 for development
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
+import { autofillAPI } from '@/lib/api';
 
 // Format file size for display
 const formatFileSize = (bytes: number): string => {
@@ -31,6 +31,7 @@ const formatFileSize = (bytes: number): string => {
 };
 
 export function AutoFillSection() {
+  const [selectedPdfId, setSelectedPdfId] = useState<number | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -48,16 +49,42 @@ export function AutoFillSection() {
     label: p.name
   }));
 
-  // Get current provider with anchors
+  // Get current provider with PDFs
   const currentProvider = currentProviderId ? getProviderById(currentProviderId) : null;
-  const hasAnchors = (currentProvider?.anchors?.length || 0) > 0;
+  
+  // Get selected PDF's anchors
+  const selectedPdf = useMemo(() => {
+    if (!currentProvider || !selectedPdfId) return null;
+    return currentProvider.pdfs.find(p => p.id === selectedPdfId);
+  }, [currentProvider, selectedPdfId]);
+  
+  const selectedAnchors = selectedPdf?.anchors || [];
+  const hasAnchors = selectedAnchors.length > 0;
+
+  // PDF options for dropdown
+  const pdfOptions = useMemo(() => {
+    if (!currentProvider) return [];
+    return currentProvider.pdfs.map(pdf => ({
+      value: String(pdf.id),
+      label: `${pdf.filename} (${pdf.anchorCount} anchors)`
+    }));
+  }, [currentProvider]);
 
   // Handle provider change
   const handleProviderChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setCurrentProvider(e.target.value);
+    setSelectedPdfId(null); // Reset PDF selection
     setError(null);
     setSuccess(false);
     setStagedFile(null);
+  };
+
+  // Handle PDF selection change
+  const handlePdfChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const pdfId = e.target.value ? parseInt(e.target.value) : null;
+    setSelectedPdfId(pdfId);
+    setError(null);
+    setSuccess(false);
   };
 
   // Validate before upload - show warning modal if issues
@@ -67,13 +94,18 @@ export function AutoFillSection() {
       setShowWarningModal(true);
       return false;
     }
+    if (!selectedPdfId) {
+      setWarningMessage('Please select a PDF template with anchor settings.');
+      setShowWarningModal(true);
+      return false;
+    }
     if (!hasAnchors) {
-      setWarningMessage('Selected provider has no anchor settings configured. Please add anchors in Contract Mapper first.');
+      setWarningMessage('Selected PDF has no anchor settings configured. Please add anchors in Contract Mapper first.');
       setShowWarningModal(true);
       return false;
     }
     return true;
-  }, [currentProviderId, activeProviders.length, hasAnchors]);
+  }, [currentProviderId, activeProviders.length, selectedPdfId, hasAnchors]);
 
   // Handle file selection - just stage the file, don't process yet
   const handleFileSelect = useCallback((file: File) => {
@@ -89,17 +121,17 @@ export function AutoFillSection() {
   }, []);
 
   /**
-   * Process the staged file
+   * Process the staged file using autofillAPI
    * @param preview - If true, uses RED text (for verification). If false, uses WHITE text (clean output for signing)
    */
   const handleConfirmProcess = useCallback(async (preview: boolean = false) => {
-    if (!currentProviderId || !currentProvider || !stagedFile) {
-      setError('Please select a provider and file first.');
+    if (!currentProviderId || !currentProvider || !stagedFile || !selectedPdfId) {
+      setError('Please select a provider, PDF template, and file first.');
       return;
     }
 
     if (!hasAnchors) {
-      setError('Selected provider has no anchor settings. Please add anchors in Contract Mapper first.');
+      setError('Selected PDF has no anchor settings. Please add anchors in Contract Mapper first.');
       return;
     }
 
@@ -108,32 +140,19 @@ export function AutoFillSection() {
     setSuccess(false);
 
     try {
-      // Create form data with PDF and anchor settings
-      const formData = new FormData();
-      formData.append('pdf', stagedFile);
-      formData.append('anchors', JSON.stringify(currentProvider.anchors));
-      formData.append('preview', String(preview)); // Red text for preview, White for final
-      
-      // Include canvas dimensions from first anchor (for coordinate conversion)
-      const firstAnchor = currentProvider.anchors[0];
-      if (firstAnchor?.canvasWidth && firstAnchor?.canvasHeight) {
-        formData.append('canvasWidth', String(firstAnchor.canvasWidth));
-        formData.append('canvasHeight', String(firstAnchor.canvasHeight));
-      }
+      // Get canvas dimensions from first anchor
+      const firstAnchor = selectedAnchors[0];
+      const canvasWidth = firstAnchor?.canvasWidth || 1224;
+      const canvasHeight = firstAnchor?.canvasHeight || 1584;
 
-      // Send to backend API
-      const response = await fetch(`${API_URL}/api/autofill`, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `Server error: ${response.status}`);
-      }
-
-      // Get PDF blob from response
-      const pdfBlob = await response.blob();
+      // Use autofillAPI which handles the fetch
+      const pdfBlob = await autofillAPI.process(
+        stagedFile,
+        selectedAnchors,
+        canvasWidth,
+        canvasHeight,
+        preview
+      );
       
       // Create download link and trigger download
       const downloadUrl = URL.createObjectURL(pdfBlob);
@@ -160,7 +179,7 @@ export function AutoFillSection() {
     } finally {
       setIsProcessing(false);
     }
-  }, [currentProviderId, currentProvider, stagedFile, hasAnchors]);
+  }, [currentProviderId, currentProvider, stagedFile, selectedPdfId, hasAnchors, selectedAnchors]);
 
   return (
     <section className="max-w-[900px] mx-auto">
@@ -173,23 +192,41 @@ export function AutoFillSection() {
       <div className="table-card p-6">
         {/* Provider Selection */}
         <Select
-          label="Select Provider Settings"
+          label="Select Provider"
           placeholder="-- Select Provider --"
           options={providerOptions}
           value={currentProviderId || ''}
           onChange={handleProviderChange}
         />
 
+        {/* PDF Template Selection (if provider has PDFs) */}
+        {currentProvider && currentProvider.pdfs.length > 0 && (
+          <Select
+            label="Select PDF Template"
+            placeholder="-- Select PDF with anchors --"
+            options={pdfOptions}
+            value={selectedPdfId?.toString() || ''}
+            onChange={handlePdfChange}
+          />
+        )}
+
+        {/* No PDFs Message */}
+        {currentProvider && currentProvider.pdfs.length === 0 && (
+          <div className="mt-2 mb-4 text-sm text-[var(--gh-red)]">
+            ⚠ This provider has no PDF templates. Upload a contract in Contract Mapper first.
+          </div>
+        )}
+
         {/* Anchor Count Info */}
-        {currentProvider && (
+        {selectedPdf && (
           <div className="mt-2 mb-4 text-sm text-[var(--text-main)]">
             {hasAnchors ? (
               <span className="text-[var(--gh-green)]">
-                ✓ {currentProvider.anchors.length} anchor{currentProvider.anchors.length > 1 ? 's' : ''} configured
+                ✓ {selectedAnchors.length} anchor{selectedAnchors.length > 1 ? 's' : ''} configured for {selectedPdf.filename}
               </span>
             ) : (
               <span className="text-[var(--gh-red)]">
-                ⚠ No anchors configured. Add anchors in Contract Mapper first.
+                ⚠ No anchors configured for this PDF. Add anchors in Contract Mapper first.
               </span>
             )}
           </div>
@@ -218,7 +255,7 @@ export function AutoFillSection() {
             <Loader2 size={40} className="animate-spin text-[var(--gh-green)] mx-auto mb-4" />
             <p className="text-[var(--text-heading)] font-medium">Processing PDF...</p>
             <p className="text-sm text-[#8b949e] mt-2">
-              Placing {currentProvider?.anchors.length || 0} anchor(s) on your document
+              Placing {selectedAnchors.length || 0} anchor(s) on your document
             </p>
           </div>
         ) : stagedFile ? (
@@ -246,8 +283,8 @@ export function AutoFillSection() {
             </div>
             
             <p className="text-sm text-[#8b949e] mb-4">
-              Ready to process with <strong className="text-[var(--text-heading)]">{currentProvider?.name}</strong> settings 
-              ({currentProvider?.anchors.length || 0} anchor{(currentProvider?.anchors.length || 0) > 1 ? 's' : ''})
+              Using template: <strong className="text-[var(--text-heading)]">{selectedPdf?.filename}</strong> 
+              <br />({selectedAnchors.length || 0} anchor{(selectedAnchors.length || 0) > 1 ? 's' : ''})
             </p>
             
             <div className="flex flex-wrap gap-3">
@@ -289,8 +326,9 @@ export function AutoFillSection() {
       <div className="mt-6 p-4 bg-[var(--bg-sidebar)] border border-[var(--border-default)] rounded-md">
         <h4 className="text-sm font-semibold text-[var(--text-heading)] mb-2">How it works:</h4>
         <ol className="text-sm text-[var(--text-main)] space-y-1 list-decimal list-inside">
-          <li>Select a provider with configured anchor settings</li>
-          <li>Upload a PDF contract (same format as the one used for mapping)</li>
+          <li>Select a provider</li>
+          <li>Select a PDF template with configured anchor settings</li>
+          <li>Upload a PDF contract (same format as the template)</li>
           <li>Click <strong>"Preview"</strong> to download with <span className="text-[var(--gh-red)]">red text</span> (verify positions)</li>
           <li>Click <strong>"Download Clean"</strong> to get the final PDF with white text (ready for signing)</li>
         </ol>

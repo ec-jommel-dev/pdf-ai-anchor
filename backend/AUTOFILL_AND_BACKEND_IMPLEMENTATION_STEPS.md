@@ -1,4 +1,4 @@
-# Auto Fill Anchor - Backend Implementation Guide
+# PDF Anchor Mapper - Backend Implementation Guide
 
 **Author & Developer:** Jommel Hinayon
 
@@ -10,25 +10,30 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                     ENERGYANCHOR SYSTEM FLOW                             │
+│                   PDF ANCHOR MAPPER SYSTEM FLOW                          │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
 │  1. CONTRACT MAPPER (Setup Phase)                                       │
 │     ├── User selects Provider                                           │
 │     ├── User uploads PDF → Stored in backend/uploads/                   │
+│     ├── Each provider can have MULTIPLE PDFs                            │
 │     ├── User clicks on PDF to place anchors                             │
-│     └── Anchors saved: text, x, y, page, canvasWidth, canvasHeight      │
+│     └── Anchors saved to SPECIFIC PDF: text, x, y, page, canvas dims    │
 │                                                                         │
 │  2. ANCHOR SETTINGS (Management)                                        │
-│     ├── View all anchors for provider                                   │
+│     ├── Select PDF from dropdown                                        │
+│     ├── View anchors for selected PDF only                              │
 │     ├── Edit anchor with live preview + zoom                            │
-│     ├── Preview fetches PDF from backend storage                        │
+│     ├── Preview fetches PDF from backend by pdfId                       │
 │     └── Delete anchors with confirmation                                │
 │                                                                         │
 │  3. AUTO-FILL PROCESS                                                   │
-│     ├── User selects Provider (must have anchors)                       │
+│     ├── User selects Provider                                           │
+│     ├── User selects PDF template (with anchors)                        │
 │     ├── User uploads PDF for processing                                 │
 │     ├── Backend: Places anchor text at saved coordinates                │
+│     ├── Preview mode: RED text (for verification)                       │
+│     ├── Clean mode: WHITE text (for signing)                            │
 │     └── Returns filled PDF → Auto-download                              │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
@@ -47,10 +52,11 @@
 │  │   Next.js App    │  Port 3000                               │
 │  │   (Frontend)     │                                          │
 │  ├──────────────────┤                                          │
-│  │ • React UI       │                                          │
-│  │ • Zustand Store  │───────┐                                  │
-│  │ • API Service    │       │ HTTP/JSON                        │
-│  │ • PDF.js Viewer  │       │                                  │
+│  │ • Dashboard      │                                          │
+│  │ • Contract Mapper│───────┐                                  │
+│  │ • Auto Fill      │       │ HTTP/JSON                        │
+│  │ • Provider List  │       │                                  │
+│  │ • Word to PDF*   │       │  *Client-side only               │
 │  └──────────────────┘       │                                  │
 │                             ▼                                  │
 │  ┌──────────────────┐  ┌──────────────────┐                   │
@@ -58,14 +64,14 @@
 │  │   (Backend)      │  │   (MariaDB)      │                   │
 │  ├──────────────────┤  ├──────────────────┤                   │
 │  │ Port 5001        │  │ • providers      │                   │
-│  │ • /api/providers │──│ • anchor_settings│                   │
-│  │ • /api/anchors   │  │ • provider_pdfs  │                   │
-│  │ • /api/pdfs      │  └──────────────────┘                   │
+│  │ • /api/providers │──│ • provider_pdfs  │ (1:N)             │
+│  │ • /api/pdfs      │  │ • anchor_settings│ (PDF:N)           │
+│  │ • /api/anchors   │  └──────────────────┘                   │
 │  │ • /api/autofill  │                                          │
 │  │ • PyMuPDF        │  ┌──────────────────┐                   │
 │  │                  │──│   uploads/       │ File Storage      │
-│  └──────────────────┘  │ • provider_1.pdf │                   │
-│                        │ • provider_2.pdf │                   │
+│  └──────────────────┘  │ • provider_4_*.pdf│                   │
+│                        │ • provider_5_*.pdf│                   │
 │                        └──────────────────┘                   │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
@@ -100,35 +106,41 @@
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                         DATABASE SCHEMA                          │
+│                    (Multiple PDFs per Provider)                  │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │  ┌─────────────┐       ┌──────────────────┐                    │
-│  │  providers  │       │  anchor_settings │                    │
+│  │  providers  │       │  provider_pdfs   │                    │
 │  ├─────────────┤       ├──────────────────┤                    │
 │  │ id (PK)     │──┐    │ id (PK)          │                    │
-│  │ name        │  │    │ provider_id (FK) │◄─┐                 │
-│  │ is_active   │  └───►│ text             │  │                 │
-│  │ created_at  │       │ x                │  │                 │
-│  │ updated_at  │       │ y                │  │                 │
-│  └─────────────┘       │ page             │  │                 │
-│         │              │ canvas_width     │  │                 │
-│         │              │ canvas_height    │  │                 │
-│         │              │ created_at       │  │                 │
-│         │              │ updated_at       │  │                 │
-│         │              └──────────────────┘  │                 │
-│         │                                    │                 │
-│         │       ┌──────────────────┐         │                 │
-│         │       │  provider_pdfs   │         │                 │
-│         │       ├──────────────────┤         │                 │
-│         └──────►│ id (PK)          │         │                 │
-│                 │ provider_id (FK) │◄────────┘                 │
-│                 │ filename         │                           │
-│                 │ file_path        │                           │
-│                 │ file_size        │                           │
-│                 │ total_pages      │                           │
-│                 │ content_hash     │  (duplicate detection)    │
-│                 │ created_at       │                           │
-│                 └──────────────────┘                           │
+│  │ name        │  └───►│ provider_id (FK) │                    │
+│  │ is_active   │       │ filename         │                    │
+│  │ created_at  │       │ file_path        │                    │
+│  │ updated_at  │       │ file_size        │                    │
+│  └─────────────┘       │ total_pages      │                    │
+│                        │ canvas_width     │                    │
+│                        │ canvas_height    │                    │
+│                        │ content_hash     │ (duplicate check)  │
+│                        │ is_active        │ (soft delete)      │
+│                        │ created_at       │                    │
+│                        └────────┬─────────┘                    │
+│                                 │                               │
+│                                 │ 1:N                           │
+│                                 ▼                               │
+│                        ┌──────────────────┐                    │
+│                        │ anchor_settings  │                    │
+│                        ├──────────────────┤                    │
+│                        │ id (PK)          │                    │
+│                        │ pdf_id (FK)      │ ⭐ Anchors belong  │
+│                        │ text             │    to PDFs now     │
+│                        │ x                │                    │
+│                        │ y                │                    │
+│                        │ page             │                    │
+│                        │ canvas_width     │                    │
+│                        │ canvas_height    │                    │
+│                        │ created_at       │                    │
+│                        │ updated_at       │                    │
+│                        └──────────────────┘                    │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -144,24 +156,7 @@ CREATE TABLE providers (
 );
 ```
 
-### Table: `anchor_settings`
-```sql
-CREATE TABLE anchor_settings (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    provider_id INT NOT NULL,
-    text VARCHAR(255) NOT NULL,
-    x INT NOT NULL,
-    y INT NOT NULL,
-    page VARCHAR(50) NOT NULL DEFAULT '1',
-    canvas_width INT,
-    canvas_height INT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (provider_id) REFERENCES providers(id) ON DELETE CASCADE
-);
-```
-
-### Table: `provider_pdfs`
+### Table: `provider_pdfs` ⭐ UPDATED
 ```sql
 CREATE TABLE provider_pdfs (
     id INT PRIMARY KEY AUTO_INCREMENT,
@@ -170,9 +165,29 @@ CREATE TABLE provider_pdfs (
     file_path VARCHAR(500) NOT NULL,
     file_size INT,
     total_pages INT,
+    canvas_width INT,
+    canvas_height INT,
     content_hash VARCHAR(64),
+    is_active TINYINT(1) DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (provider_id) REFERENCES providers(id) ON DELETE CASCADE
+);
+```
+
+### Table: `anchor_settings` ⭐ UPDATED
+```sql
+CREATE TABLE anchor_settings (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    pdf_id INT NOT NULL,              -- Changed from provider_id
+    text VARCHAR(255) NOT NULL,
+    x INT NOT NULL,
+    y INT NOT NULL,
+    page VARCHAR(50) NOT NULL DEFAULT '1',
+    canvas_width INT,
+    canvas_height INT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (pdf_id) REFERENCES provider_pdfs(id) ON DELETE CASCADE
 );
 ```
 
@@ -184,38 +199,51 @@ CREATE TABLE provider_pdfs (
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/providers` | List all active providers |
-| GET | `/api/providers/<id>` | Get provider with anchors |
+| GET | `/api/providers` | List all providers with PDFs and anchors |
+| GET | `/api/providers/<id>` | Get single provider with all data |
 | POST | `/api/providers` | Create provider |
 | PUT | `/api/providers/<id>` | Update provider (name, active) |
 | DELETE | `/api/providers/<id>` | Soft delete (is_active=0) |
 
-### Anchor API
+### PDF API ⭐ UPDATED (Multiple PDFs)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/providers/<id>/anchors` | List anchors for provider |
+| GET | `/api/providers/<id>/pdfs` | List all PDFs for provider |
+| POST | `/api/providers/<id>/pdfs` | Upload new PDF (supports multiple) |
+| GET | `/api/pdfs/<pdf_id>` | Download specific PDF |
+| GET | `/api/pdfs/<pdf_id>/info` | Get PDF metadata |
+| PUT | `/api/pdfs/<pdf_id>` | Update PDF metadata |
+| DELETE | `/api/pdfs/<pdf_id>` | Soft delete PDF |
+| DELETE | `/api/pdfs/<pdf_id>/hard-delete` | Permanently delete |
+| GET | `/api/pdfs/<pdf_id>/page/<num>` | Get page as image |
+| POST | `/api/pdf/check-duplicate` | Check if PDF exists |
+
+### Anchor API ⭐ UPDATED (Belongs to PDF)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/pdfs/<pdf_id>/anchors` | List anchors for specific PDF |
+| POST | `/api/pdfs/<pdf_id>/anchors` | Create anchor for PDF |
+| GET | `/api/providers/<id>/anchors` | Get all anchors (aggregated) |
 | GET | `/api/anchors/<id>` | Get single anchor |
-| POST | `/api/providers/<id>/anchors` | Create anchor |
 | PUT | `/api/anchors/<id>` | Update anchor |
 | DELETE | `/api/anchors/<id>` | Delete anchor |
-
-### PDF API ⭐
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/providers/<id>/pdf` | Upload PDF (with duplicate check) |
-| GET | `/api/providers/<id>/pdf` | Download provider's PDF |
-| GET | `/api/providers/<id>/pdf/info` | Get PDF metadata |
-| DELETE | `/api/providers/<id>/pdf` | Delete provider's PDF |
-| GET | `/api/providers/<id>/pdf/page/<num>` | Get page as image |
-| POST | `/api/pdf/check-duplicate` | Check if PDF exists |
 
 ### Auto-Fill API
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/api/autofill` | Process PDF with anchor settings |
+
+**Auto-Fill Request Parameters:**
+```
+pdf: File              - PDF file to process
+anchors: JSON          - Array of anchor settings
+canvasWidth: number    - Canvas width for coordinate conversion
+canvasHeight: number   - Canvas height for coordinate conversion
+preview: boolean       - true=red text, false=white text ⭐ NEW
+```
 
 ---
 
@@ -230,18 +258,18 @@ backend/
 ├── .env                  # Environment variables
 ├── models/
 │   ├── __init__.py       # Model exports
-│   ├── provider.py       # Provider model
-│   ├── anchor.py         # Anchor model
-│   └── pdf.py            # PDF model
+│   ├── provider.py       # Provider model (has many PDFs)
+│   ├── anchor.py         # Anchor model (belongs to PDF)
+│   └── pdf.py            # PDF model (has many anchors)
 ├── services/
 │   ├── __init__.py
 │   └── pdf_service.py    # PDF manipulation (PyMuPDF)
 ├── routes/
 │   ├── __init__.py       # Blueprint exports
 │   ├── providers.py      # Provider CRUD
-│   ├── anchors.py        # Anchor CRUD
-│   ├── pdfs.py           # PDF upload/download
-│   └── autofill.py       # Auto-fill processing
+│   ├── anchors.py        # Anchor CRUD (by PDF)
+│   ├── pdfs.py           # PDF upload/download (multiple per provider)
+│   └── autofill.py       # Auto-fill processing (with preview mode)
 └── uploads/              # PDF storage folder
 ```
 
@@ -256,10 +284,19 @@ import fitz  # PyMuPDF
 import hashlib
 
 def place_anchors_on_pdf(pdf_bytes: bytes, anchors: list, 
-                         canvas_width: int, canvas_height: int) -> bytes:
-    """Place anchor text on PDF at specified coordinates."""
+                         canvas_width: int, canvas_height: int,
+                         preview: bool = False) -> bytes:
+    """Place anchor text on PDF at specified coordinates.
+    
+    Args:
+        preview: If True, text is RED (for verification)
+                 If False, text is WHITE (for signing)
+    """
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     total_pages = len(doc)
+    
+    # Color based on mode
+    text_color = (1, 0, 0) if preview else (1, 1, 1)  # Red or White
     
     for anchor in anchors:
         pages = determine_pages(anchor['page'], total_pages)
@@ -267,19 +304,23 @@ def place_anchors_on_pdf(pdf_bytes: bytes, anchors: list,
         for page_num in pages:
             page = doc[page_num - 1]
             
-            # Convert canvas coordinates to PDF coordinates
+            # Get canvas dimensions from anchor or use provided
+            anchor_canvas_w = anchor.get('canvasWidth') or canvas_width
+            anchor_canvas_h = anchor.get('canvasHeight') or canvas_height
+            
+            # Convert coordinates
             pdf_x, pdf_y = convert_coordinates(
                 anchor['x'], anchor['y'],
-                canvas_width, canvas_height,
+                anchor_canvas_w, anchor_canvas_h,
                 page.rect.width, page.rect.height
             )
             
-            # Insert text at position
+            # Insert text
             page.insert_text(
                 (pdf_x, pdf_y),
                 anchor['text'],
                 fontsize=10,
-                color=(1, 0, 0)  # Red
+                color=text_color
             )
     
     return doc.tobytes()
@@ -291,8 +332,7 @@ def convert_coordinates(canvas_x, canvas_y, canvas_w, canvas_h, pdf_w, pdf_h):
     scale_y = pdf_h / canvas_h
     
     pdf_x = canvas_x * scale_x
-    # Flip Y axis (PDF origin is bottom-left)
-    pdf_y = pdf_h - (canvas_y * scale_y)
+    pdf_y = pdf_h - (canvas_y * scale_y)  # Flip Y axis
     
     return pdf_x, pdf_y
 
@@ -321,13 +361,6 @@ def get_pdf_content_hash(pdf_bytes: bytes) -> str:
 ### Auto-Fill Route (`routes/autofill.py`)
 
 ```python
-from flask import Blueprint, request, send_file
-from services.pdf_service import place_anchors_on_pdf
-import io
-import json
-
-autofill_bp = Blueprint('autofill', __name__)
-
 @autofill_bp.route('/autofill', methods=['POST'])
 def autofill():
     """Process PDF with anchor settings and return filled PDF."""
@@ -336,60 +369,60 @@ def autofill():
     canvas_width = int(request.form.get('canvasWidth', 1224))
     canvas_height = int(request.form.get('canvasHeight', 1584))
     
+    # NEW: Preview mode parameter
+    preview = request.form.get('preview', 'false').lower() == 'true'
+    
     pdf_bytes = pdf_file.read()
     
     result_pdf = place_anchors_on_pdf(
-        pdf_bytes, anchors, canvas_width, canvas_height
+        pdf_bytes, anchors, canvas_width, canvas_height, preview
     )
+    
+    # Dynamic filename based on mode
+    filename = 'preview_contract.pdf' if preview else 'filled_contract.pdf'
     
     return send_file(
         io.BytesIO(result_pdf),
         mimetype='application/pdf',
         as_attachment=True,
-        download_name='filled_contract.pdf'
+        download_name=filename
     )
 ```
 
-### PDF Upload with Duplicate Detection (`routes/pdfs.py`)
+### Provider Model (`models/provider.py`)
 
 ```python
-@pdfs_bp.route('/providers/<int:provider_id>/pdf', methods=['POST'])
-def upload_pdf(provider_id):
-    """Upload PDF with duplicate detection."""
-    provider = Provider.query.get_or_404(provider_id)
-    file = request.files['pdf']
+class Provider(db.Model):
+    __tablename__ = 'providers'
     
-    pdf_bytes = file.read()
-    content_hash = get_pdf_content_hash(pdf_bytes)
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
     
-    # Check for duplicate
-    existing = ProviderPDF.find_by_hash(content_hash)
-    if existing and existing.provider_id != provider_id:
-        return jsonify({
-            'warning': 'duplicate_found',
-            'message': f'PDF already exists for: {existing.provider.name}'
-        }), 409
+    # One provider has many PDFs
+    pdfs = db.relationship('ProviderPDF', backref='provider', 
+                          lazy=True, cascade='all, delete-orphan')
     
-    # Save file
-    filename = secure_filename(file.filename)
-    file_path = os.path.join('uploads', f'provider_{provider_id}_{filename}')
-    
-    with open(file_path, 'wb') as f:
-        f.write(pdf_bytes)
-    
-    # Save to database
-    provider_pdf = ProviderPDF(
-        provider_id=provider.id,
-        filename=filename,
-        file_path=file_path,
-        file_size=len(pdf_bytes),
-        total_pages=get_pdf_page_count(pdf_bytes),
-        content_hash=content_hash
-    )
-    db.session.add(provider_pdf)
-    db.session.commit()
-    
-    return jsonify(provider_pdf.to_dict()), 201
+    def to_dict(self):
+        # Aggregate all anchors from all PDFs
+        all_anchors = []
+        for pdf in self.pdfs:
+            if pdf.is_active:
+                for anchor in pdf.anchors:
+                    anchor_dict = anchor.to_dict()
+                    anchor_dict['pdfFilename'] = pdf.filename
+                    all_anchors.append(anchor_dict)
+        
+        return {
+            'id': str(self.id),
+            'name': self.name,
+            'active': self.is_active,
+            'pdfs': [pdf.to_dict() for pdf in self.pdfs if pdf.is_active],
+            'pdfCount': len([p for p in self.pdfs if p.is_active]),
+            'anchors': all_anchors
+        }
 ```
 
 ---
@@ -480,7 +513,7 @@ npm run dev
 # Health check
 curl http://127.0.0.1:5001/api/health
 
-# List providers
+# List providers (includes PDFs and anchors)
 curl http://127.0.0.1:5001/api/providers
 
 # Create provider
@@ -496,29 +529,31 @@ curl -X POST http://127.0.0.1:5001/api/providers \
 ### ✅ Provider Management
 - Create, read, update, delete providers
 - Soft delete (is_active flag)
-- List active/all providers
+- Returns PDFs and aggregated anchors
+
+### ✅ Multiple PDFs per Provider ⭐ NEW
+- Upload multiple PDFs for each provider
+- Each PDF has its own anchor settings
+- Soft delete PDFs (is_active flag)
+- Duplicate detection via content hash
 
 ### ✅ Anchor Management
+- Anchors belong to specific PDFs (not providers)
 - Create anchors with coordinates
 - Edit anchors with live preview
 - Delete anchors with confirmation
 - Page settings: global, last, specific
 
-### ✅ PDF Storage
-- Upload PDF for each provider
-- Store in `uploads/` folder
-- Duplicate detection via content hash
-- Download for preview feature
-- Delete when no longer needed
-
 ### ✅ Auto-Fill Processing
 - Receive PDF + anchor settings
 - Place text at coordinates
+- **Preview mode**: Red text (for verification)
+- **Clean mode**: White text (for signing)
 - Handle coordinate conversion
-- Return filled PDF for download
 
 ### ✅ Frontend Integration
 - All CRUD operations connected
+- PDF selection dropdown
 - Toast notifications
 - Loading states
 - Error handling
@@ -527,7 +562,7 @@ curl -X POST http://127.0.0.1:5001/api/providers \
 
 ## Coordinate System
 
-### Important: Canvas vs PDF Coordinates
+### Canvas vs PDF Coordinates
 
 ```
 Canvas (HTML):              PDF (PyMuPDF):
@@ -558,20 +593,20 @@ pdf_y = pdf_height - (canvas_y * (pdf_height / canvas_height))
 - [x] `database.py` - SQLAlchemy setup
 - [x] `.env` - Environment variables
 - [x] `requirements.txt` - Dependencies
-- [x] `models/provider.py` - Provider model
-- [x] `models/anchor.py` - Anchor model
-- [x] `models/pdf.py` - PDF model with hash
-- [x] `services/pdf_service.py` - PDF manipulation
+- [x] `models/provider.py` - Provider model (has many PDFs)
+- [x] `models/anchor.py` - Anchor model (belongs to PDF)
+- [x] `models/pdf.py` - PDF model (has many anchors)
+- [x] `services/pdf_service.py` - PDF manipulation with preview mode
 - [x] `routes/providers.py` - Provider CRUD
-- [x] `routes/anchors.py` - Anchor CRUD
-- [x] `routes/pdfs.py` - PDF upload/download
-- [x] `routes/autofill.py` - Auto-fill endpoint
+- [x] `routes/anchors.py` - Anchor CRUD (by PDF)
+- [x] `routes/pdfs.py` - Multiple PDFs per provider
+- [x] `routes/autofill.py` - Auto-fill with preview/clean modes
 - [x] `uploads/` - File storage folder
 
 ### Frontend Integration ✅ COMPLETE
-- [x] `lib/api.ts` - API service
-- [x] `useProviderStore.ts` - Async operations
-- [x] All modals with async save
+- [x] `lib/api.ts` - API service (PDF by ID, anchors by PDF)
+- [x] `useProviderStore.ts` - currentPdfId, PDF/anchor selection
+- [x] All sections updated for multiple PDFs
 - [x] Toast notifications
 - [x] Loading states
 

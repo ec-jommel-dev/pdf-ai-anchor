@@ -1,4 +1,4 @@
-# 📄 EnergyAnchor - PDF Contract Anchor Mapping System
+# 🎯 PDF Anchor Mapper
 
 > A full-stack application for mapping anchor coordinates on PDF contracts for automated text placement. Built with **Next.js 14+**, **Flask**, and **PyMuPDF**.
 
@@ -12,28 +12,42 @@
 
 ## ✨ Features
 
-### Contract Mapper
-- 📤 Upload PDF contracts and assign to providers
-- 🖱️ Click-to-place anchor markers on PDF pages
-- 🔍 Live preview with zoom controls
-- 📍 Precise coordinate capture for text placement
+### 📊 Dashboard
+- Quick overview with stats (Providers, Contracts, Anchors)
+- Quick action cards for Contract Mapper and Auto Fill
+- Provider overview table with status and counts
 
-### Anchor Settings
-- ✏️ Edit anchors with real-time PDF preview
-- 🎯 Click on preview to adjust coordinates
-- 🔎 Zoom in/out for precision (50% - 250%)
-- 📄 Page settings: Global, Last Page, or Specific Pages
+### 📤 Contract Mapper
+- Upload PDF contracts and assign to providers
+- **Multiple PDFs per provider** - Upload different contract templates
+- Click-to-place anchor markers on PDF pages
+- Live preview with zoom controls (50% - 250%)
+- Precise coordinate capture for text placement
 
-### Auto-Fill
-- ⚡ Automatically place anchor text on PDFs
+### ⚡ Auto-Fill Anchor
+- Select provider and **specific PDF template**
+- Automatically place anchor text on PDFs
 - 👁️ **Preview Mode** - Red text to verify positions
 - 📥 **Clean Download** - White text for signing
-- 🔄 Batch processing ready
+- Batch processing ready
 
-### Provider Management
-- ➕ Create, edit, and manage energy providers
-- 🏷️ Active/Inactive status management
-- 📋 Anchor settings per provider
+### 📄 Anchor Settings
+- Edit anchors with real-time PDF preview
+- Click on preview to adjust coordinates
+- Zoom in/out for precision
+- Page settings: Global, Last Page, or Specific Pages
+- **Filter by PDF** - View anchors for specific contract
+
+### 📋 Provider Management
+- Create, edit, and manage providers
+- Active/Inactive status management
+- View all PDFs and anchors per provider
+
+### 📝 Word to PDF Converter
+- **100% Client-side** - Files never leave your browser
+- Convert .docx and .doc files to PDF
+- Drag & drop or click to upload
+- No API or database required
 
 ---
 
@@ -50,6 +64,11 @@
         │                │   uploads/       │
         │                │   (PDF Storage)  │
         └───────────────▶└──────────────────┘
+```
+
+### Data Model
+```
+Provider (1) ──► (N) PDFs (1) ──► (N) Anchors
 ```
 
 ---
@@ -149,7 +168,7 @@ pdf-ai-anchor/
 │   │   ├── app/             # App router pages
 │   │   ├── components/      # React components
 │   │   │   ├── layout/      # Sidebar, Header
-│   │   │   ├── sections/    # Main sections
+│   │   │   ├── sections/    # Dashboard, Mapper, AutoFill, etc.
 │   │   │   ├── modals/      # Modal dialogs
 │   │   │   ├── pdf/         # PDF components
 │   │   │   └── ui/          # UI primitives
@@ -179,43 +198,37 @@ pdf-ai-anchor/
 ### Providers
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/providers` | List all providers |
+| GET | `/api/providers` | List all providers with PDFs |
 | POST | `/api/providers` | Create provider |
 | PUT | `/api/providers/:id` | Update provider |
 | DELETE | `/api/providers/:id` | Delete provider |
 
-### Anchors
+### PDFs (Multiple per Provider)
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/providers/:id/anchors` | List anchors |
-| POST | `/api/providers/:id/anchors` | Create anchor |
+| GET | `/api/providers/:id/pdfs` | List all PDFs for provider |
+| POST | `/api/providers/:id/pdfs` | Upload new PDF |
+| GET | `/api/pdfs/:id` | Download PDF |
+| GET | `/api/pdfs/:id/info` | Get PDF metadata |
+| DELETE | `/api/pdfs/:id` | Delete PDF |
+
+### Anchors (Belong to PDFs)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/pdfs/:id/anchors` | List anchors for PDF |
+| POST | `/api/pdfs/:id/anchors` | Create anchor |
 | PUT | `/api/anchors/:id` | Update anchor |
 | DELETE | `/api/anchors/:id` | Delete anchor |
-
-### PDF
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/providers/:id/pdf` | Upload PDF |
-| GET | `/api/providers/:id/pdf` | Download PDF |
-| GET | `/api/providers/:id/pdf/info` | Get PDF info |
 
 ### Auto-Fill
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/api/autofill` | Process PDF with anchors |
 
----
-
-## 🎨 Screenshots
-
-### Contract Mapper
-*Upload PDF and click to place anchor markers*
-
-### Anchor Settings
-*View and manage anchor positions with live preview*
-
-### Auto-Fill
-*Process PDFs with saved anchor settings*
+**Auto-Fill Parameters:**
+- `pdf` - File to process
+- `anchors` - JSON array of anchor settings
+- `preview` - `true` for red text, `false` for white text
 
 ---
 
@@ -228,6 +241,8 @@ pdf-ai-anchor/
 - **Zustand** - State management
 - **PDF.js** - PDF rendering
 - **Lucide React** - Icons
+- **mammoth.js** - Word to HTML (for converter)
+- **html2pdf.js** - HTML to PDF (for converter)
 
 ### Backend
 - **Flask** - Python web framework
@@ -253,10 +268,26 @@ CREATE TABLE providers (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
--- Anchor settings table
-CREATE TABLE anchor_settings (
+-- Provider PDFs table (multiple per provider)
+CREATE TABLE provider_pdfs (
     id INT PRIMARY KEY AUTO_INCREMENT,
     provider_id INT NOT NULL,
+    filename VARCHAR(255) NOT NULL,
+    file_path VARCHAR(500) NOT NULL,
+    file_size INT,
+    total_pages INT,
+    canvas_width INT,
+    canvas_height INT,
+    content_hash VARCHAR(64),
+    is_active TINYINT(1) DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (provider_id) REFERENCES providers(id) ON DELETE CASCADE
+);
+
+-- Anchor settings table (belong to PDFs)
+CREATE TABLE anchor_settings (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    pdf_id INT NOT NULL,
     text VARCHAR(255) NOT NULL,
     x INT NOT NULL,
     y INT NOT NULL,
@@ -265,22 +296,28 @@ CREATE TABLE anchor_settings (
     canvas_height INT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (provider_id) REFERENCES providers(id) ON DELETE CASCADE
-);
-
--- Provider PDFs table
-CREATE TABLE provider_pdfs (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    provider_id INT NOT NULL,
-    filename VARCHAR(255) NOT NULL,
-    file_path VARCHAR(500) NOT NULL,
-    file_size INT,
-    total_pages INT,
-    content_hash VARCHAR(64),
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (provider_id) REFERENCES providers(id) ON DELETE CASCADE
+    FOREIGN KEY (pdf_id) REFERENCES provider_pdfs(id) ON DELETE CASCADE
 );
 ```
+
+---
+
+## 🎨 Screenshots
+
+### Dashboard
+*Landing page with quick stats and actions*
+
+### Contract Mapper
+*Upload PDF and click to place anchor markers*
+
+### Anchor Settings
+*View and manage anchor positions with live preview*
+
+### Auto-Fill
+*Process PDFs with saved anchor settings (preview/clean modes)*
+
+### Word to PDF Converter
+*Client-side document conversion*
 
 ---
 
@@ -326,6 +363,19 @@ gunicorn app:app -b 0.0.0.0:5001
 
 ---
 
+## 🆕 Recent Updates
+
+### January 2026
+- ✅ **Dashboard** - New default landing page with stats and quick actions
+- ✅ **Multiple PDFs per Provider** - Upload different contract templates
+- ✅ **Anchors belong to PDFs** - Better data organization
+- ✅ **PDF Template Selection** - Choose which PDF to use in Auto-Fill
+- ✅ **Word to PDF Converter** - Client-side document conversion
+- ✅ **Preview/Clean Modes** - Red text for verification, white for signing
+- ✅ **New Icons** - Crosshair logo, Radio icon for providers
+
+---
+
 ## 🤝 Contributing
 
 1. Fork the repository
@@ -356,3 +406,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [PyMuPDF](https://pymupdf.readthedocs.io/) - PDF manipulation
 - [Zustand](https://github.com/pmndrs/zustand) - State management
 - [Lucide](https://lucide.dev/) - Beautiful icons
+- [mammoth.js](https://github.com/mwilliamson/mammoth.js) - Word to HTML
+- [html2pdf.js](https://github.com/eKoopmans/html2pdf.js) - HTML to PDF

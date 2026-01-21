@@ -1,8 +1,10 @@
 """
 Auto-Fill Route - Process PDF with anchor settings
+Supports both direct anchor input and PDF-based anchor lookup
 """
 from flask import Blueprint, request, send_file, jsonify
 from services.pdf_service import place_anchors_on_pdf
+from models import ProviderPDF
 import io
 import json
 
@@ -73,6 +75,73 @@ def autofill():
         filename = 'preview_contract.pdf' if is_preview else 'filled_contract.pdf'
         
         # Return filled PDF
+        return send_file(
+            io.BytesIO(result_pdf),
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=filename
+        )
+    
+    except Exception as e:
+        return jsonify({'error': f'Failed to process PDF: {str(e)}'}), 500
+
+
+@autofill_bp.route('/autofill/pdf/<int:pdf_id>', methods=['POST'])
+def autofill_with_pdf_anchors(pdf_id):
+    """
+    Process uploaded PDF using anchors from a specific saved PDF.
+    
+    Expects:
+        - pdf: PDF file to process (multipart/form-data)
+        - preview: "true" for red text, "false" for white text
+    
+    Uses:
+        - Anchors from the specified PDF ID
+        - Canvas dimensions from the specified PDF
+    
+    Returns:
+        - Filled PDF as download
+    """
+    # Get the saved PDF with its anchors
+    saved_pdf = ProviderPDF.query.get_or_404(pdf_id)
+    
+    if not saved_pdf.anchors or len(saved_pdf.anchors) == 0:
+        return jsonify({'error': 'No anchor settings found for this PDF'}), 400
+    
+    # Validate uploaded PDF file
+    if 'pdf' not in request.files:
+        return jsonify({'error': 'No PDF file provided'}), 400
+    
+    pdf_file = request.files['pdf']
+    
+    if pdf_file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+    
+    # Get preview mode
+    preview_param = request.form.get('preview', 'false').lower()
+    is_preview = preview_param == 'true'
+    
+    # Read PDF bytes
+    pdf_bytes = pdf_file.read()
+    
+    # Get anchors from the saved PDF
+    anchors = [a.to_dict() for a in saved_pdf.anchors]
+    
+    # Use canvas dimensions from saved PDF
+    canvas_width = saved_pdf.canvas_width or 1224
+    canvas_height = saved_pdf.canvas_height or 1584
+    
+    try:
+        result_pdf = place_anchors_on_pdf(
+            pdf_bytes,
+            anchors,
+            canvas_width,
+            canvas_height,
+            preview=is_preview
+        )
+        
+        filename = 'preview_contract.pdf' if is_preview else 'filled_contract.pdf'
+        
         return send_file(
             io.BytesIO(result_pdf),
             mimetype='application/pdf',

@@ -2,6 +2,7 @@
  * PHASE 9.2: Anchor Modal Component
  * Add/Edit anchor with coordinates and page settings
  * Includes live preview with click-to-adjust coordinates and zoom
+ * Updated: Uses pdfId for anchor operations (multiple PDFs per provider)
  */
 
 'use client';
@@ -26,6 +27,7 @@ interface AnchorModalProps {
   isOpen: boolean;
   onClose: () => void;
   providerId: string;
+  pdfId: number;           // Required: anchor belongs to specific PDF
   editAnchorId?: number | null;
   initialX?: number;
   initialY?: number;
@@ -43,6 +45,7 @@ export function AnchorModal({
   isOpen,
   onClose,
   providerId,
+  pdfId,
   editAnchorId,
   initialX = 0,
   initialY = 0,
@@ -73,7 +76,7 @@ export function AnchorModal({
   // Populate form when editing or with initial values
   useEffect(() => {
     if (editAnchorId) {
-      const anchor = getAnchorById(providerId, editAnchorId);
+      const anchor = getAnchorById(editAnchorId);
       if (anchor) {
         setAnchorKey(extractAnchorKey(anchor.text));
         setX(anchor.x);
@@ -97,17 +100,18 @@ export function AnchorModal({
         setSpecificPages(String(initialPage));
       }
     }
-  }, [editAnchorId, providerId, getAnchorById, isOpen, initialX, initialY, initialPage]);
+  }, [editAnchorId, getAnchorById, isOpen, initialX, initialY, initialPage]);
 
-  // Load preview PDF
+  // Load preview PDF using pdfId
   const loadPreview = useCallback(async () => {
-    if (!providerId || !canvasRef.current) return;
+    if (!pdfId || !canvasRef.current) return;
     
     setIsLoadingPreview(true);
     setPreviewError(null);
     
     try {
-      const pdfData = await pdfAPI.download(providerId);
+      // Download PDF by pdfId
+      const pdfData = await pdfAPI.download(pdfId);
       
       if (!pdfjsLib) {
         pdfjsLib = await import('pdfjs-dist');
@@ -160,11 +164,11 @@ export function AnchorModal({
       
     } catch (error) {
       console.error('Preview error:', error);
-      setPreviewError('No PDF uploaded for this provider.');
+      setPreviewError('Failed to load PDF preview.');
     } finally {
       setIsLoadingPreview(false);
     }
-  }, [providerId, pageType, specificPages, zoom]);
+  }, [pdfId, pageType, specificPages, zoom]);
 
   // Load preview when toggled on
   useEffect(() => {
@@ -235,15 +239,16 @@ export function AnchorModal({
       y,
       page: pageValue,
       canvasWidth: canvasDimensions.width || undefined,
-      canvasHeight: canvasDimensions.height || undefined
+      canvasHeight: canvasDimensions.height || undefined,
+      pdfId: pdfId
     };
 
     try {
       if (editAnchorId) {
-        await updateAnchor(providerId, editAnchorId, anchorData);
+        await updateAnchor(editAnchorId, anchorData);
         showToast('Anchor updated successfully!', 'success');
       } else {
-        await addAnchor(providerId, anchorData);
+        await addAnchor(pdfId, anchorData);
         showToast('Anchor saved successfully!', 'success');
       }
 

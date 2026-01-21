@@ -1,9 +1,9 @@
-# EnergyAnchor Next.js Implementation Guide
+# PDF Anchor Mapper - Next.js Implementation Guide
 
 **Author & Developer:** Jommel Hinayon
 
 ## Overview
-This guide documents the complete Next.js 14+ frontend implementation for the EnergyAnchor PDF Contract application. The application allows users to map anchor coordinates on PDF contracts for automated text placement.
+This guide documents the complete Next.js 14+ frontend implementation for the PDF Anchor Mapper application. The application allows users to map anchor coordinates on PDF contracts for automated text placement.
 
 **Status: ✅ FULLY INTEGRATED** - Frontend connected to Flask backend API
 
@@ -18,7 +18,7 @@ npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --
 
 ### Step 1.2: Install Dependencies
 ```bash
-npm install lucide-react pdfjs-dist zustand
+npm install lucide-react pdfjs-dist zustand mammoth html2pdf.js
 ```
 
 **Dependencies:**
@@ -27,6 +27,8 @@ npm install lucide-react pdfjs-dist zustand
 | `lucide-react` | ^0.511.0 | Icon library |
 | `pdfjs-dist` | ^5.2.133 | PDF rendering |
 | `zustand` | ^5.0.5 | State management |
+| `mammoth` | ^1.6.0 | Word to HTML conversion |
+| `html2pdf.js` | ^0.10.1 | HTML to PDF conversion |
 
 ### Step 1.3: Final Project Structure
 ```
@@ -35,6 +37,7 @@ src/
 │   ├── layout.tsx          # Root layout with theme script
 │   ├── page.tsx            # Main page component
 │   ├── globals.css         # Theme variables + global styles
+│   ├── icon.svg            # Crosshair favicon
 │   └── favicon.ico
 ├── components/
 │   ├── layout/
@@ -42,10 +45,12 @@ src/
 │   │   ├── MobileHeader.tsx    # Mobile hamburger menu
 │   │   └── MainLayout.tsx      # Layout wrapper
 │   ├── sections/
-│   │   ├── ContractMapperSection.tsx   # PDF upload + mapper
-│   │   ├── AutoFillSection.tsx         # Auto-fill PDF upload
-│   │   ├── ProviderListSection.tsx     # Provider table
-│   │   └── ProviderProfileSection.tsx  # Provider details + anchors
+│   │   ├── DashboardSection.tsx      # ⭐ NEW: Dashboard landing page
+│   │   ├── ContractMapperSection.tsx # PDF upload + mapper
+│   │   ├── AutoFillSection.tsx       # Auto-fill PDF upload
+│   │   ├── ProviderListSection.tsx   # Provider table
+│   │   ├── ProviderProfileSection.tsx# Provider details + anchors
+│   │   └── ConverterSection.tsx      # ⭐ NEW: Word to PDF converter
 │   ├── pdf/
 │   │   ├── PDFViewer.tsx       # Canvas PDF renderer
 │   │   ├── PDFUploadBox.tsx    # Drag & drop upload
@@ -95,6 +100,8 @@ src/
   --gh-green: #1a7f37;
   --gh-green-hover: #166b2e;
   --gh-red: #cf222e;
+  --gh-purple: #8250df;
+  --gh-orange: #bf8700;
   --btn-bg: #f6f8fa;
   --btn-hover: #f3f4f6;
   --input-bg: #ffffff;
@@ -113,6 +120,8 @@ src/
   --gh-green: #238636;
   --gh-green-hover: #2ea043;
   --gh-red: #f85149;
+  --gh-purple: #a371f7;
+  --gh-orange: #d29922;
   --btn-bg: #21262d;
   --btn-hover: #30363d;
   --input-bg: #0d1117;
@@ -129,44 +138,7 @@ src/
 }
 ```
 
-### Step 2.3: Anchor Input Styling
-```css
-/* Anchor Input Container - {{ key }} format */
-.anchor-input-container {
-  position: relative;
-  display: flex;
-  align-items: center;
-  background: var(--input-bg);
-  border: 1px solid var(--border-default);
-  border-radius: 6px;
-  margin: 8px 0 16px;
-  padding: 0 12px;
-}
-
-.anchor-bracket {
-  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
-  font-weight: 600;
-  color: var(--gh-blue);
-  font-size: 15px;
-}
-
-.anchor-input-container input.form-input {
-  flex: 1;
-  border: none;
-  background: transparent;
-  font-family: 'SF Mono', monospace;
-}
-```
-
-### Step 2.4: Theme Hook (`hooks/useTheme.ts`)
-**Features:**
-- Reads initial theme from `localStorage`
-- Toggles between light/dark
-- Persists preference to `localStorage`
-- Applies `data-theme` attribute to body
-- Returns `{ theme, toggleTheme, isDark, mounted }`
-
-### Step 2.5: Theme Flash Prevention (`layout.tsx`)
+### Step 2.3: Theme Flash Prevention (`layout.tsx`)
 Inline script in `<head>` to prevent FOUC:
 ```tsx
 <script dangerouslySetInnerHTML={{
@@ -189,24 +161,41 @@ Inline script in `<head>` to prevent FOUC:
 // Anchor with coordinate metadata for backend processing
 export interface Anchor {
   id: number;
+  pdfId?: number;         // Reference to parent PDF
   text: string;           // e.g., "{{signature_1}}"
   x: number;              // X coordinate on PDF canvas
   y: number;              // Y coordinate on PDF canvas
   page: string;           // 'global' | 'last' | comma-separated pages
   canvasWidth?: number;   // Canvas width when anchor was placed
   canvasHeight?: number;  // Canvas height when anchor was placed
+  pdfFilename?: string;   // For display: which PDF this anchor belongs to
 }
 
-// Provider with associated anchor settings
+// ProviderPDF represents an uploaded contract PDF template
+export interface ProviderPDF {
+  id: number;
+  providerId: number;
+  filename: string;
+  fileSize?: number;
+  totalPages?: number;
+  isActive: boolean;
+  createdAt?: string;
+  anchors: Anchor[];       // Each PDF has its own anchors
+  anchorCount: number;
+}
+
+// Provider with multiple PDF templates
 export interface Provider {
   id: string;
   name: string;
-  active: boolean;        // true = Active, false = Inactive
-  anchors: Anchor[];
+  active: boolean;
+  pdfs: ProviderPDF[];     // Multiple PDFs per provider
+  pdfCount: number;
+  anchors: Anchor[];       // Flattened view of all anchors
 }
 
 // Navigation tabs
-export type TabType = 'upload' | 'autofill' | 'list' | 'profile';
+export type TabType = 'dashboard' | 'upload' | 'autofill' | 'list' | 'converter' | 'profile';
 
 // Modal state management
 export type ModalType = 
@@ -215,16 +204,7 @@ export type ModalType =
   | 'preview' 
   | 'nextStep' 
   | 'confirmDelete'
-  | 'warning'
-  | 'success'
   | null;
-
-// PDF viewer state
-export interface PDFState {
-  currentPage: number;
-  totalPages: number;
-  isLoading: boolean;
-}
 ```
 
 ---
@@ -238,6 +218,7 @@ interface ProviderStore {
   // State
   providers: Provider[];
   currentProviderId: string | null;
+  currentPdfId: number | null;     // ⭐ NEW: Selected PDF for anchor operations
   activeTab: TabType;
   openModal: ModalType;
   pdfData: ArrayBuffer | null;
@@ -253,25 +234,22 @@ interface ProviderStore {
   updateProvider: (id: string, name: string, active?: boolean) => Promise<void>;
   deleteProvider: (id: string) => Promise<void>;
   toggleProviderStatus: (id: string) => Promise<void>;
-  getActiveProviders: () => Provider[];
-  getProviderById: (id: string) => Provider | undefined;
-  getCurrentProvider: () => Provider | undefined;
 
-  // Anchor Actions (async - connected to API)
-  addAnchor: (providerId: string, anchor: Omit<Anchor, 'id'>) => Promise<void>;
-  updateAnchor: (providerId: string, anchorId: number, data: Partial<Anchor>) => Promise<void>;
-  deleteAnchor: (providerId: string, anchorId: number) => Promise<void>;
-  getAnchorById: (providerId: string, anchorId: number) => Anchor | undefined;
+  // Anchor Actions (async - now use pdfId)
+  addAnchor: (pdfId: number, anchor: Omit<Anchor, 'id'>) => Promise<void>;
+  updateAnchor: (anchorId: number, data: Partial<Anchor>) => Promise<void>;
+  deleteAnchor: (anchorId: number) => Promise<void>;
+  getAnchorById: (anchorId: number) => Anchor | undefined;
+
+  // PDF Selection Actions ⭐ NEW
+  setCurrentPdfId: (id: number | null) => void;
+  getCurrentPdf: () => ProviderPDF | undefined;
+  getCurrentPdfAnchors: () => Anchor[];
 
   // Navigation Actions
   setActiveTab: (tab: TabType) => void;
   setCurrentProvider: (id: string | null) => void;
   viewProfile: (id: string) => void;
-
-  // PDF Actions
-  setPdfData: (data: ArrayBuffer | null) => void;
-  setPdfTotalPages: (pages: number) => void;
-  setCanvasDimensions: (dimensions: { width: number; height: number }) => void;
 
   // Toast Actions
   showToast: (message: string, type?: 'success' | 'error') => void;
@@ -282,124 +260,67 @@ interface ProviderStore {
 }
 ```
 
-### Step 4.2: Navigation State Persistence
+---
 
+## Phase 5: Navigation & Layout ✅
+
+### Step 5.1: Sidebar Navigation Items
 ```typescript
-// Storage keys
-const STORAGE_KEYS = {
-  ACTIVE_TAB: 'pdfAnchor_activeTab'
-};
-
-// Hydration after mount to avoid SSR mismatch
-useEffect(() => {
-  hydrateFromStorage();
-}, [hydrateFromStorage]);
+const navItems = [
+  { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard /> },      // ⭐ NEW
+  { id: 'upload', label: 'Contract Mapper', icon: <UploadCloud /> },
+  { id: 'autofill', label: 'Auto Fill Anchor', icon: <Zap /> },
+  { id: 'list', label: 'Provider List', icon: <Radio /> },                  // Changed icon
+  { id: 'converter', label: 'Word to PDF', icon: <FileOutput /> },          // ⭐ NEW
+];
 ```
+
+### Step 5.2: Logo
+- Icon: `Crosshair` (lucide-react) - green color
+- Text: "PDF Anchor Mapper"
+- Favicon: Custom SVG crosshair (`app/icon.svg`)
 
 ---
 
-## Phase 5: UI Components ✅
+## Phase 6: Section Components ✅
 
-### Step 5.1: Button Component
-Variants: `default`, `primary`, `danger`
+### Step 6.1: Dashboard Section ⭐ NEW
 
-### Step 5.2: Badge Component
-Variants: `active` (green), `inactive` (red), `default`
-
-### Step 5.3: Input Component
-Styled form input with label
-
-### Step 5.4: Select Component
-Dropdown with placeholder support:
-```tsx
-<Select
-  placeholder="-- Select Provider --"
-  options={providerOptions}
-  value={currentProviderId || ''}
-  onChange={handleProviderChange}
-/>
-```
-
-### Step 5.5: Modal Component
-Reusable modal wrapper with customizable `maxWidth`
-
-### Step 5.6: Toast Component
-- Success (green) / Error (red) variants
-- Auto-fade after 3 seconds
-- Slide-in animation
-- Manual close button
-
----
-
-## Phase 6: Layout Components ✅
-
-### Step 6.1: Sidebar (`components/layout/Sidebar.tsx`)
-- ProviderHub logo with shield icon
-- Navigation items:
-  - Contract Mapper (`upload-cloud` icon)
-  - Auto Fill Anchor (`zap` icon)
-  - Provider List (`users` icon)
-- Theme toggle at bottom (Sun/Moon icons)
-
-### Step 6.2: Mobile Header (`components/layout/MobileHeader.tsx`)
-- Hamburger menu button
-- Logo
-- Shows only on mobile (< 768px)
-
-### Step 6.3: Main Layout (`components/layout/MainLayout.tsx`)
-- Combines Sidebar + MobileHeader + Main content
-- Responsive grid layout
-
----
-
-## Phase 7: PDF Components ✅
-
-### Step 7.1: PDF.js Configuration
-**Critical: Uses dynamic import for SSR compatibility**
-```typescript
-// Dynamic import to avoid "DOMMatrix is not defined" SSR error
-type PDFJSLib = typeof import('pdfjs-dist');
-let pdfjsLib: PDFJSLib | null = null;
-
-// Worker from unpkg CDN (more reliable than cdnjs)
-pdfjsLib.GlobalWorkerOptions.workerSrc = 
-  `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
-```
-
-### Step 7.2: PDF Upload Box (`components/pdf/PDFUploadBox.tsx`)
-- Drag & drop zone with visual feedback
-- **Validation callback:** `onBeforeUpload` prop to validate before upload
-- Accepts only PDF files
-
-### Step 7.3: PDF Viewer (`components/pdf/PDFViewer.tsx`)
 **Features:**
-- Canvas rendering at 2x scale (RENDER_SCALE = 2.0)
-- Page navigation (prev/next buttons)
-- Click handler with coordinate scaling
-- Render task cancellation
-- ArrayBuffer cloning to prevent detachment
+- Welcome header with app logo
+- Quick stats cards (Providers, Active, Contracts, Anchors)
+- Quick action cards:
+  - **Contract Mapper** - Click to navigate
+  - **Auto Fill Anchor** - Click to navigate
+- Provider overview table (top 5 providers)
+- "View All" link to Provider List
 
-**Key Implementation:**
-```typescript
-// Clone ArrayBuffer before passing to worker
-const doc = await pdfjsLib.getDocument({ data: pdfData.slice(0) }).promise;
-
-// Cancel any ongoing render before starting new one
-if (renderTaskRef.current) {
-  renderTaskRef.current.cancel();
-}
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ 🎯 PDF Anchor Mapper                                            │
+│ Map anchor strings to PDF contracts and auto-fill them          │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────┐  ┌─────┐  ┌─────┐  ┌─────┐                            │
+│  │  4  │  │  3  │  │  5  │  │ 12  │  Quick Stats               │
+│  │Provs│  │Actve│  │PDFs │  │Anchrs│                            │
+│  └─────┘  └─────┘  └─────┘  └─────┘                            │
+├─────────────────────────────────────────────────────────────────┤
+│  Quick Actions                                                   │
+│  ┌───────────────────────┐  ┌───────────────────────┐          │
+│  │ 📤 Contract Mapper    │  │ ⚡ Auto Fill Anchor   │          │
+│  │ Upload and map...     │  │ Apply saved settings..│          │
+│  └───────────────────────┘  └───────────────────────┘          │
+├─────────────────────────────────────────────────────────────────┤
+│  Provider Overview                            [View All →]       │
+│  ┌──────────────────────────────────────────────────────┐      │
+│  │ Provider      │ Status │ Contracts │ Anchors │       │      │
+│  │ PG&E          │ Active │    2      │    5    │ View→ │      │
+│  │ SoCal Edison  │ Active │    1      │    3    │ View→ │      │
+│  └──────────────────────────────────────────────────────┘      │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-### Step 7.4: Indicator Layer (`components/pdf/IndicatorLayer.tsx`)
-- Renders anchor dots with labels
-- Filters anchors by current page (handles 'global', 'last', specific pages)
-- Accurate coordinate conversion
-
----
-
-## Phase 8: Section Components ✅
-
-### Step 8.1: Contract Mapper Section
+### Step 6.2: Contract Mapper Section
 **Flow:**
 1. Select provider from dropdown
 2. Select PDF file (staged - not uploaded yet)
@@ -408,112 +329,105 @@ if (renderTaskRef.current) {
 5. Interactive mapper view with click-to-place anchors
 6. Finish → Success Modal → Navigate to Anchor Settings
 
-**Features:**
-- **Staged file confirmation** prevents accidental uploads
-- PDF stored in backend `uploads/` folder
-- PDF saved to database for preview feature
-- Warning modal if no provider selected
+**Updates:**
+- Tracks `currentUploadedPdfId` for anchor creation
+- Shows PDF count for selected provider
+- Anchors saved to specific PDF
 
-### Step 8.2: Auto Fill Section
+### Step 6.3: Auto Fill Section
 **Flow:**
-1. Select provider (must have anchors configured)
-2. Select PDF file (staged)
-3. **Confirmation view** - Shows file info with "Process & Download" button
-4. Click "Process & Download" → Backend processes PDF
-5. Auto-downloads filled PDF
+1. Select provider
+2. Select PDF template (from provider's PDFs) ⭐ NEW
+3. Select PDF file to process (staged)
+4. Click "Preview" (red text) or "Download Clean" (white text)
+5. Auto-downloads processed PDF
+
+**Updates:**
+- PDF template dropdown (multiple PDFs per provider)
+- Shows anchor count for selected PDF
+- Two output modes: Preview (red) and Clean (white)
+
+### Step 6.4: Provider Profile Section
+**Updates:**
+- PDF selection dropdown ⭐ NEW
+- Filters anchors by selected PDF
+- Shows PDF metadata (pages, size, date)
+- "No PDFs" message with upload CTA
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ ← Back to List                                                  │
+├─────────────────────────────────────────────────────────────────┤
+│ Provider Name: PG&E                                             │
+│ ID: 4  │  Status: Active  │  PDFs: 2 contracts                 │
+├─────────────────────────────────────────────────────────────────┤
+│ 📄 Select Contract PDF                                          │
+│ ┌──────────────────────────────────────────┐                   │
+│ │ ▼ contract_2024.pdf (5 anchors)          │                   │
+│ └──────────────────────────────────────────┘                   │
+│ 10 pages • 245.3 KB • Added: 1/21/2026                         │
+├─────────────────────────────────────────────────────────────────┤
+│ Anchor Settings for contract_2024.pdf      [+ Add Anchor]       │
+│ ┌──────────────────────────────────────────────────────────┐   │
+│ │ Anchor Text  │ Coords    │ Page │ Actions               │   │
+│ │ {{day}}      │ 549, 312  │  1   │ Preview Edit Delete   │   │
+│ │ {{month}}    │ 695, 310  │  1   │ Preview Edit Delete   │   │
+│ └──────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Step 6.5: Word to PDF Converter ⭐ NEW
 
 **Features:**
-- Shows anchor count for selected provider
-- Warning modal if no provider or no anchors
-- Staged file prevents wrong file processing
+- 100% client-side conversion (no API/database needed)
+- Uses `mammoth.js` for Word → HTML
+- Uses `html2pdf.js` for HTML → PDF
+- Drag & drop or click to upload
+- Supports .docx and .doc files
+- Auto-download after conversion
 
-### Step 8.3: Provider List Section
-- Header with "Add New Provider" button
-- Table: Name, Status, Actions
-- Status badge: Active (green) / Inactive (red)
-- Action buttons: View, Edit (5px gap)
-- Loading state during API fetch
-
-### Step 8.4: Provider Profile Section
-**Sections:**
-1. **Provider Info Card** - Name, ID, Status
-2. **Anchor Settings Table** - Text, Coordinates, Page, Actions
-
-**Anchor Actions:**
-- Preview (fetches PDF from backend)
-- Edit (live preview with zoom)
-- Delete (confirmation modal)
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Word to PDF Converter                                           │
+├─────────────────────────────────────────────────────────────────┤
+│ ℹ️ Client-side conversion - Files never leave your browser      │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │                                                         │   │
+│  │           📤 Drop your Word document here               │   │
+│  │                  or click to browse                     │   │
+│  │                                                         │   │
+│  │              Supports .docx and .doc files              │   │
+│  └─────────────────────────────────────────────────────────┘   │
+├─────────────────────────────────────────────────────────────────┤
+│ How it works:                                                   │
+│ 1. Select or drag & drop a Word document                       │
+│ 2. Click "Convert & Download PDF"                              │
+│ 3. Your PDF will automatically download                        │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## Phase 9: Modal Components ✅
+## Phase 7: Modal Components ✅
 
-### Step 9.1: Provider Modal
-- Mode: "Add Provider" / "Edit Provider"
-- Fields: Company Name (placeholder: "e.g. Pacific Gas & Electric")
-- Edit mode includes: Status select (Active/Inactive)
-- Async save with toast notification
+### Step 7.1: Anchor Modal
+**Updates:**
+- Now requires `pdfId` prop
+- Live preview fetches PDF by `pdfId`
+- Creates anchors for specific PDF
 
-### Step 9.2: Anchor Modal ⭐ NEW FEATURES
-**Standard Form:**
-- Anchor Key input with `{{ }}` visual brackets
-- X/Y Coordinate inputs
-- Page Location select (Global/Last/Specific)
-
-**Live Preview Panel:**
-- Toggle button: "Show Preview & Adjust"
-- Full PDF preview (fetched from backend)
-- **Click to adjust** coordinates visually
-- **Zoom controls** (50% - 250%)
-- **Tiny 4px indicator** for precise placement
-- Real-time coordinate updates
-
-```
-┌──────────────────┬────────────────────────────────────┐
-│ Form (320px)     │ Live Preview (click to adjust)     │
-│                  │                    [- 100% + ↺]    │
-│ {{ day     }}    │ ┌─────────────────────────────┐    │
-│                  │ │                             │    │
-│ X: 564  Y: 302   │ │    PDF Page (scrollable)   │    │
-│                  │ │                             │    │
-│ Page: [▼]        │ │         🔴 {{day}}         │    │
-│ [1]              │ │                             │    │
-│                  │ └─────────────────────────────┘    │
-│ [Hide Preview]   │ 🖱️ Click to adjust position       │
-└──────────────────┴────────────────────────────────────┘
-                      [Cancel]  [Save Anchor]
-```
-
-### Step 9.3: Preview Modal
-- Fetches PDF from **backend storage** (not browser memory)
-- Shows PDF page with anchor indicator
-- Scrolls to anchor position after render
-- Works even after page refresh!
-
-### Step 9.4: Next Step Modal
-- "Keep Mapping" - Continue adding anchors
-- "Finish & Review" - Show Success Modal
-
-### Step 9.5: Success Modal ⭐ NEW
-- Green checkmark icon
-- "Mapping Complete!" message
-- Primary: "View Anchor Settings" → Navigate to profile
-- Secondary: "Map Another PDF" → Reset
-
-### Step 9.6: Confirm Delete Modal
-- Warning icon
-- "Delete" button (danger variant)
-
-### Step 9.7: Warning Modal
-- Yellow warning icon
-- Customizable title and message
-- Used for validation warnings
+### Step 7.2: Preview Modal
+**Updates:**
+- Accepts `pdfId` prop (primary)
+- Falls back to `providerId` for legacy support
+- Fetches PDF by ID from backend
 
 ---
 
-## Phase 10: API Integration ✅
+## Phase 8: API Integration ✅
 
-### Step 10.1: API Service (`lib/api.ts`)
+### Step 8.1: API Service (`lib/api.ts`)
 
 ```typescript
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
@@ -527,108 +441,96 @@ export const providerAPI = {
   delete: (id: string) => fetchAPI(`/providers/${id}`, { method: 'DELETE' }),
 };
 
-// Anchor API
-export const anchorAPI = {
-  getAll: (providerId: string) => fetchAPI(`/providers/${providerId}/anchors`),
-  create: (providerId: string, anchor) => fetchAPI(`/providers/${providerId}/anchors`, { method: 'POST', ... }),
-  update: (providerId: string, anchorId: number, data) => fetchAPI(`/anchors/${anchorId}`, { method: 'PUT', ... }),
-  delete: (providerId: string, anchorId: number) => fetchAPI(`/anchors/${anchorId}`, { method: 'DELETE' }),
+// PDF API (Multiple PDFs per Provider) ⭐ UPDATED
+export const pdfAPI = {
+  list: (providerId: string) => fetchAPI(`/providers/${providerId}/pdfs`),
+  upload: async (providerId: string, file: File) => { /* FormData */ },
+  download: async (pdfId: number): Promise<ArrayBuffer> => { /* Get PDF by ID */ },
+  downloadByProvider: async (providerId: string) => { /* Legacy */ },
+  getInfo: (pdfId: number) => fetchAPI(`/pdfs/${pdfId}/info`),
+  delete: (pdfId: number) => fetchAPI(`/pdfs/${pdfId}`, { method: 'DELETE' }),
 };
 
-// PDF API ⭐ NEW
-export const pdfAPI = {
-  upload: async (providerId: string, file: File) => { /* FormData upload */ },
-  download: async (providerId: string): Promise<ArrayBuffer> => { /* Get PDF */ },
-  getInfo: (providerId: string) => fetchAPI(`/providers/${providerId}/pdf/info`),
-  delete: (providerId: string) => fetchAPI(`/providers/${providerId}/pdf`, { method: 'DELETE' }),
-  checkDuplicate: async (file: File) => { /* Check if PDF exists */ },
+// Anchor API (Belongs to PDF) ⭐ UPDATED
+export const anchorAPI = {
+  getByPdf: (pdfId: number) => fetchAPI(`/pdfs/${pdfId}/anchors`),
+  getByProvider: (providerId: string) => fetchAPI(`/providers/${providerId}/anchors`),
+  create: (pdfId: number, anchor) => fetchAPI(`/pdfs/${pdfId}/anchors`, { method: 'POST', ... }),
+  update: (anchorId: number, data) => fetchAPI(`/anchors/${anchorId}`, { method: 'PUT', ... }),
+  delete: (anchorId: number) => fetchAPI(`/anchors/${anchorId}`, { method: 'DELETE' }),
 };
 
 // Autofill API
 export const autofillAPI = {
-  process: async (file: File, anchors, canvasWidth, canvasHeight) => {
+  process: async (file, anchors, canvasWidth, canvasHeight, preview) => {
     // Returns blob for download
+    // preview=true: Red text | preview=false: White text
   },
 };
 ```
 
-### Step 10.2: Connected Endpoints
-
-| Endpoint | Method | Frontend Action |
-|----------|--------|-----------------|
-| `/api/providers` | GET | `fetchProviders()` on app load |
-| `/api/providers` | POST | `addProvider(name)` |
-| `/api/providers/:id` | PUT | `updateProvider(id, name, active)` |
-| `/api/providers/:id` | DELETE | `deleteProvider(id)` |
-| `/api/providers/:id/anchors` | POST | `addAnchor(providerId, anchor)` |
-| `/api/anchors/:id` | PUT | `updateAnchor(...)` |
-| `/api/anchors/:id` | DELETE | `deleteAnchor(...)` |
-| `/api/providers/:id/pdf` | POST | Upload PDF |
-| `/api/providers/:id/pdf` | GET | Download PDF |
-| `/api/autofill` | POST | Process PDF with anchors |
-
 ---
 
-## Phase 11: Bug Fixes & Optimizations ✅
+## Phase 9: Key User Flows
 
-### 11.1: PDF.js SSR Error
-**Solution:** Dynamic import of pdfjs-dist in client components
-
-### 11.2: PDF Worker Loading
-**Solution:** Use unpkg.com CDN with `.mjs` extension
-
-### 11.3: ArrayBuffer Detached Error
-**Solution:** Clone ArrayBuffer: `pdfData.slice(0)`
-
-### 11.4: Canvas Render Conflict
-**Solution:** Track and cancel ongoing render tasks with `renderTaskRef`
-
-### 11.5: Coordinate Accuracy
-**Solution:** Use consistent display dimensions for calculations
-
-### 11.6: Preview Canvas Null Error
-**Solution:** Always render canvas (use opacity for loading state)
-
-### 11.7: API Route Mismatch
-**Solution:** Anchor update/delete use `/anchors/:id` not `/providers/:pid/anchors/:id`
-
----
-
-## Phase 12: Key User Flows
-
-### Contract Mapping Flow
+### Dashboard → Contract Mapping
 ```
-1. Select Provider
-2. Select PDF file → Confirmation view
-3. Click "Upload & Continue"
-4. PDF uploaded to backend storage
-5. Click on PDF → Anchor modal opens
-6. Fill anchor details → Save
-7. Next Step modal → Keep Mapping or Finish
-8. Finish → Success Modal
-9. "View Anchor Settings" → Provider Profile
+1. Land on Dashboard (default tab)
+2. Click "Contract Mapper" quick action
+3. Select Provider
+4. Upload PDF → Confirmation view
+5. Click "Upload & Continue"
+6. PDF uploaded and stored
+7. Click on PDF to place anchors
+8. Save anchor → Next Step modal
+9. Finish → Success Modal
+10. "View Anchor Settings" → Provider Profile
 ```
 
-### Auto-Fill Flow
+### Dashboard → Auto-Fill
 ```
-1. Select Provider (with anchors)
-2. Select PDF file → Confirmation view
-3. Click "Process & Download"
-4. Backend places anchors on PDF
-5. Filled PDF auto-downloads
+1. Land on Dashboard
+2. Click "Auto Fill Anchor" quick action
+3. Select Provider
+4. Select PDF Template (with anchors)
+5. Upload PDF to process → Confirmation view
+6. Click "Preview (Red Text)" or "Download Clean"
+7. Filled PDF auto-downloads
 ```
 
-### Edit Anchor Flow
+### Edit Anchor with Live Preview
 ```
 1. Go to Provider Profile
-2. Click "Edit" on anchor
-3. Anchor modal opens
+2. Select PDF from dropdown
+3. Click "Edit" on anchor
 4. Click "Show Preview & Adjust"
-5. Preview panel shows PDF
+5. PDF preview loads (from backend)
 6. Click on PDF to adjust position
-7. Use zoom for precision
+7. Use zoom controls for precision
 8. Save → Toast notification
 ```
+
+### Word to PDF Conversion
+```
+1. Click "Word to PDF" in sidebar
+2. Drop or select Word document
+3. Click "Convert & Download PDF"
+4. PDF auto-downloads (client-side only)
+```
+
+---
+
+## Phase 10: Bug Fixes & Optimizations ✅
+
+| Issue | Solution |
+|-------|----------|
+| PDF.js SSR Error | Dynamic import of pdfjs-dist |
+| PDF Worker Loading | Use unpkg.com CDN with `.mjs` |
+| ArrayBuffer Detached | Clone: `pdfData.slice(0)` |
+| Canvas Render Conflict | Track and cancel render tasks |
+| Coordinate Accuracy | Consistent display dimensions |
+| Hydration Mismatch | `hydrateFromStorage()` in useEffect |
+| Select without options | Pass `options` prop, not children |
 
 ---
 
@@ -643,20 +545,22 @@ NEXT_PUBLIC_API_URL=http://localhost:5001
 
 ## Quick Reference
 
-### Key Conversions from HTML to React
-
-| Original (HTML/JS) | Next.js Equivalent |
-|-------------------|-------------------|
-| `onclick="fn()"` | `onClick={fn}` |
-| `document.getElementById()` | `useRef()` or state |
-| `localStorage` | `useEffect` + `useState` |
-| `pdfjsLib.getDocument()` | Dynamic import + `useEffect` |
+### Navigation Tabs
+| Tab | Icon | Component | Description |
+|-----|------|-----------|-------------|
+| Dashboard | LayoutDashboard | DashboardSection | Landing page with stats |
+| Contract Mapper | UploadCloud | ContractMapperSection | Upload & map PDFs |
+| Auto Fill Anchor | Zap | AutoFillSection | Process PDFs |
+| Provider List | Radio | ProviderListSection | Manage providers |
+| Word to PDF | FileOutput | ConverterSection | Convert documents |
 
 ### Important Notes
+- Dashboard is the default landing page
 - All PDF components must be client-side (`'use client'`)
 - PDF.js requires dynamic import to avoid SSR issues
 - ArrayBuffer must be cloned before passing to PDF.js worker
-- Preview fetches PDF from backend (persists after refresh)
+- Multiple PDFs per provider - anchors belong to specific PDFs
+- Word to PDF is 100% client-side (no API needed)
 
 ---
 

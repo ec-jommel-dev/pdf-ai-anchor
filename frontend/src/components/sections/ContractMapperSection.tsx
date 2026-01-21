@@ -4,6 +4,7 @@
  * - User selects file → sees confirmation → clicks Upload button
  * - Uploads PDF to backend (stores in uploads folder)
  * - PDF is saved for preview in Anchor Settings
+ * Updated: Supports multiple PDFs per provider
  */
 
 'use client';
@@ -30,6 +31,7 @@ const formatFileSize = (bytes: number): string => {
 
 export function ContractMapperSection() {
   const [pdfData, setPdfData] = useState<ArrayBuffer | null>(null);
+  const [currentUploadedPdfId, setCurrentUploadedPdfId] = useState<number | null>(null);
   const [showMapper, setShowMapper] = useState(false);
   const [showAnchorModal, setShowAnchorModal] = useState(false);
   const [showNextStepModal, setShowNextStepModal] = useState(false);
@@ -41,17 +43,22 @@ export function ContractMapperSection() {
   
   // Staged file - user selected but not yet uploaded
   const [stagedFile, setStagedFile] = useState<File | null>(null);
+  
+  // Track anchors for current uploaded PDF
+  const [currentPdfAnchors, setCurrentPdfAnchors] = useState<import('@/types').Anchor[]>([]);
 
   const { 
     getActiveProviders, 
     currentProviderId, 
     setCurrentProvider,
+    setCurrentPdfId,
     getCurrentProvider,
     setPdfData: setStorePdfData,
     setPdfTotalPages,
     setCanvasDimensions,
     viewProfile,
-    showToast
+    showToast,
+    fetchProviders
   } = useProviderStore();
 
   const activeProviders = getActiveProviders();
@@ -84,17 +91,26 @@ export function ContractMapperSection() {
 
     try {
       // Upload PDF to backend (stores in uploads folder + saves to DB)
-      await pdfAPI.upload(currentProviderId, stagedFile);
+      // Returns the new PDF info including its ID
+      const uploadedPdf = await pdfAPI.upload(currentProviderId, stagedFile);
       showToast('PDF uploaded successfully!', 'success');
+      
+      // Store the uploaded PDF's ID for anchor creation
+      setCurrentUploadedPdfId(uploadedPdf.id);
+      setCurrentPdfId(uploadedPdf.id);
+      setCurrentPdfAnchors(uploadedPdf.anchors || []);
 
       // Now get the PDF back as ArrayBuffer for viewing
-      const arrayBuffer = await pdfAPI.download(currentProviderId);
+      const arrayBuffer = await pdfAPI.download(uploadedPdf.id);
       const copy = arrayBuffer.slice(0);
       
       setPdfData(copy);
       setStorePdfData(copy);
       setStagedFile(null);
       setShowMapper(true);
+      
+      // Refresh providers to get updated PDF list
+      await fetchProviders();
     } catch (error) {
       console.error('Upload error:', error);
       setUploadError(error instanceof Error ? error.message : 'Failed to upload PDF');
@@ -102,7 +118,7 @@ export function ContractMapperSection() {
     } finally {
       setIsUploading(false);
     }
-  }, [currentProviderId, stagedFile, setStorePdfData, showToast]);
+  }, [currentProviderId, stagedFile, setStorePdfData, setCurrentPdfId, showToast, fetchProviders]);
 
   // Handle canvas click - opens anchor modal with coordinates
   const handleCanvasClick = useCallback((x: number, y: number, page: number) => {
@@ -113,14 +129,25 @@ export function ContractMapperSection() {
   // Reset to upload view
   const handleReset = useCallback(() => {
     setPdfData(null);
+    setCurrentUploadedPdfId(null);
+    setCurrentPdfAnchors([]);
     setShowMapper(false);
     setUploadError(null);
   }, []);
 
-  // Handle anchor save success
-  const handleAnchorSaved = useCallback(() => {
+  // Handle anchor save success - refresh anchors
+  const handleAnchorSaved = useCallback(async () => {
+    // Refresh to get updated anchors
+    if (currentUploadedPdfId) {
+      try {
+        const pdfInfo = await pdfAPI.getInfo(currentUploadedPdfId);
+        setCurrentPdfAnchors(pdfInfo.anchors || []);
+      } catch (e) {
+        console.error('Failed to refresh anchors:', e);
+      }
+    }
     setShowNextStepModal(true);
-  }, []);
+  }, [currentUploadedPdfId]);
 
   // Handle "Finish & Review" - show success modal
   const handleFinish = useCallback(() => {
@@ -181,6 +208,13 @@ export function ContractMapperSection() {
               value={currentProviderId || ''}
               onChange={handleProviderChange}
             />
+
+            {/* Show current PDFs count */}
+            {currentProvider && currentProvider.pdfs.length > 0 && (
+              <p className="text-xs text-[#8b949e] mt-2">
+                {currentProvider.name} has {currentProvider.pdfs.length} PDF(s). Uploading another will add to the list.
+              </p>
+            )}
 
             {/* Error Message */}
             {uploadError && (
@@ -250,19 +284,19 @@ export function ContractMapperSection() {
             <h4 className="text-sm font-semibold text-[var(--text-heading)] mb-2">How it works:</h4>
             <ol className="text-sm text-[var(--text-main)] space-y-1 list-decimal list-inside">
               <li>Select a provider to assign the contract to</li>
-              <li>Upload a PDF contract document</li>
+              <li>Upload a PDF contract document (each provider can have multiple PDFs)</li>
               <li>Click anywhere on the PDF to place anchor markers</li>
               <li>Set the anchor key (e.g., <code className="text-[var(--gh-blue)]">{'{{day}}'}</code>) and page settings</li>
-              <li>Anchors are saved and can be used in Auto Fill</li>
+              <li>Anchors are saved to that specific PDF for use in Auto Fill</li>
             </ol>
           </div>
         </div>
       ) : (
         /* PDF Mapper View */
-        pdfData && currentProviderId && (
+        pdfData && currentProviderId && currentUploadedPdfId && (
           <PDFViewer
             pdfData={pdfData}
-            anchors={currentProvider?.anchors || []}
+            anchors={currentPdfAnchors}
             onCanvasClick={handleCanvasClick}
             onReset={handleReset}
             onFinish={handleFinish}
@@ -272,12 +306,13 @@ export function ContractMapperSection() {
         )
       )}
 
-      {/* Anchor Modal */}
-      {currentProviderId && (
+      {/* Anchor Modal - now uses pdfId */}
+      {currentProviderId && currentUploadedPdfId && (
         <AnchorModal
           isOpen={showAnchorModal}
           onClose={() => setShowAnchorModal(false)}
           providerId={currentProviderId}
+          pdfId={currentUploadedPdfId}
           initialX={clickCoords.x}
           initialY={clickCoords.y}
           initialPage={clickCoords.page}

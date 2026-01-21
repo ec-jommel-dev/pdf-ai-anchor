@@ -1,5 +1,6 @@
 """
 Provider Model - Energy company/provider entity
+Now supports multiple PDFs, each with its own anchors
 """
 from database import db
 from datetime import datetime
@@ -13,19 +14,29 @@ class Provider(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # Relationships
-    anchors = db.relationship('Anchor', backref='provider', lazy=True, cascade='all, delete-orphan')
-    pdf = db.relationship('ProviderPDF', backref='provider', uselist=False, cascade='all, delete-orphan')
+    # Relationships: Provider has many PDFs (each PDF has many Anchors)
+    pdfs = db.relationship('ProviderPDF', backref='provider', lazy=True, cascade='all, delete-orphan')
     
-    def to_dict(self):
+    def to_dict(self, include_pdfs=True):
         """Convert provider to dictionary for JSON response"""
-        return {
+        data = {
             'id': str(self.id),
             'name': self.name,
             'active': self.is_active,
-            'anchors': [anchor.to_dict() for anchor in self.anchors],
-            'hasPdf': self.pdf is not None
+            'pdfCount': len(self.pdfs) if self.pdfs else 0
         }
+        
+        if include_pdfs:
+            # Include PDFs with their anchors
+            data['pdfs'] = [pdf.to_dict() for pdf in self.pdfs if pdf.is_active]
+            # Flatten all anchors for backward compatibility
+            all_anchors = []
+            for pdf in self.pdfs:
+                if pdf.is_active:
+                    all_anchors.extend([a.to_dict() for a in pdf.anchors])
+            data['anchors'] = all_anchors
+        
+        return data
     
     def __repr__(self):
         return f'<Provider {self.name}>'

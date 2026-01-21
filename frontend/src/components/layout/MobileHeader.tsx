@@ -5,7 +5,7 @@
 
 'use client';
 
-import { Shield, Menu, X } from 'lucide-react';
+import { Crosshair, Menu, X } from 'lucide-react';
 
 interface MobileHeaderProps {
   isMenuOpen: boolean;
@@ -17,8 +17,8 @@ export function MobileHeader({ isMenuOpen, onToggleMenu }: MobileHeaderProps) {
     <header className="hidden max-md:flex h-[60px] bg-[var(--bg-sidebar)] border-b border-[var(--border-default)] px-5 items-center justify-between sticky top-0 z-[1001]">
       {/* Logo */}
       <div className="flex items-center gap-2.5 font-semibold text-[var(--text-heading)]">
-        <Shield size={20} />
-        <span>ProviderHub</span>
+        <Crosshair size={20} className="text-[var(--gh-green)]" />
+        <span>PDF Anchor Mapper</span>
       </div>
 
       {/* Hamburger Button */}

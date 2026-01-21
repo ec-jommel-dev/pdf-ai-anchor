@@ -1,14 +1,16 @@
 /**
  * PHASE 8.4: Provider Profile Section
- * Provider details and anchor management
+ * Provider details, PDF selection, and anchor management
+ * Updated: Multiple PDFs per provider with dropdown selection
  */
 
 'use client';
 
-import { useState } from 'react';
-import { ArrowLeft, Pin, Eye } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ArrowLeft, Pin, Eye, FileText, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { Select } from '@/components/ui/Select';
 import { AnchorModal } from '@/components/modals/AnchorModal';
 import { ConfirmDeleteModal } from '@/components/modals/ConfirmDeleteModal';
 import { PreviewModal } from '@/components/modals/PreviewModal';
@@ -28,11 +30,23 @@ export function ProviderProfileSection() {
     setActiveTab, 
     deleteAnchor,
     currentProviderId,
+    currentPdfId,
+    setCurrentPdfId,
+    getCurrentPdfAnchors,
     pdfTotalPages,
     showToast
   } = useProviderStore();
 
   const provider = getCurrentProvider();
+  const selectedAnchors = getCurrentPdfAnchors();
+  const selectedPdf = provider?.pdfs.find(p => p.id === currentPdfId);
+
+  // Auto-select first PDF when provider changes
+  useEffect(() => {
+    if (provider && provider.pdfs.length > 0 && !currentPdfId) {
+      setCurrentPdfId(provider.pdfs[0].id);
+    }
+  }, [provider, currentPdfId, setCurrentPdfId]);
 
   if (!provider) {
     return (
@@ -45,7 +59,16 @@ export function ProviderProfileSection() {
     );
   }
 
+  const handlePdfChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const pdfId = e.target.value ? parseInt(e.target.value) : null;
+    setCurrentPdfId(pdfId);
+  };
+
   const handleAddAnchor = () => {
+    if (!currentPdfId) {
+      showToast('Please select a PDF first', 'error');
+      return;
+    }
     setEditingAnchorId(null);
     setShowAnchorModal(true);
   };
@@ -61,9 +84,9 @@ export function ProviderProfileSection() {
   };
 
   const handleConfirmDelete = async () => {
-    if (deleteTargetId !== null && currentProviderId) {
+    if (deleteTargetId !== null) {
       try {
-        await deleteAnchor(currentProviderId, deleteTargetId);
+        await deleteAnchor(deleteTargetId);
         showToast('Anchor deleted successfully!', 'success');
       } catch {
         // Error handled by store
@@ -90,7 +113,7 @@ export function ProviderProfileSection() {
           {provider.name}
         </h3>
         
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-4">
           <div>
             <label className="block text-[11px] font-semibold text-[#8b949e] uppercase mb-1">
               Unique ID
@@ -107,15 +130,76 @@ export function ProviderProfileSection() {
               {provider.active ? 'Active' : 'Inactive'}
             </div>
           </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-[#8b949e] uppercase mb-1">
+              PDFs
+            </label>
+            <div className="text-sm text-[var(--text-heading)]">
+              {provider.pdfCount || provider.pdfs.length} contract(s)
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* PDF Selection Card */}
+      {provider.pdfs.length > 0 && (
+        <div className="table-card p-4 mb-6">
+          <div className="flex items-center gap-3 mb-3">
+            <FileText size={18} className="text-[var(--gh-green)]" />
+            <h4 className="text-sm font-semibold text-[var(--text-heading)] m-0">
+              Select Contract PDF
+            </h4>
+          </div>
+          
+          <Select 
+            value={currentPdfId?.toString() || ''} 
+            onChange={handlePdfChange}
+            placeholder="-- Select a PDF --"
+            options={provider.pdfs.map((pdf) => ({
+              value: String(pdf.id),
+              label: `${pdf.filename} (${pdf.anchorCount} anchor${pdf.anchorCount !== 1 ? 's' : ''})`
+            }))}
+          />
+
+          {selectedPdf && (
+            <div className="mt-3 text-xs text-[#8b949e] flex gap-4">
+              <span>{selectedPdf.totalPages || '?'} pages</span>
+              <span>{selectedPdf.fileSize ? `${(selectedPdf.fileSize / 1024).toFixed(1)} KB` : ''}</span>
+              {selectedPdf.createdAt && (
+                <span>Added: {new Date(selectedPdf.createdAt).toLocaleDateString()}</span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* No PDFs Message */}
+      {provider.pdfs.length === 0 && (
+        <div className="table-card p-6 mb-6 text-center">
+          <FileText size={40} className="mx-auto mb-3 text-[#8b949e]" />
+          <p className="text-[#8b949e] mb-3">No contract PDFs uploaded yet.</p>
+          <Button 
+            variant="primary" 
+            onClick={() => {
+              setCurrentPdfId(null);
+              setActiveTab('upload');
+            }}
+          >
+            Upload PDF in Contract Mapper
+          </Button>
+        </div>
+      )}
 
       {/* Anchor Settings Header */}
       <div className="flex justify-between items-center mb-6">
         <h3 className="text-lg font-semibold text-[var(--text-heading)] m-0">
-          Anchor Settings
+          Anchor Settings {selectedPdf && <span className="text-sm font-normal text-[#8b949e]">for {selectedPdf.filename}</span>}
         </h3>
-        <Button variant="primary" onClick={handleAddAnchor}>
+        <Button 
+          variant="primary" 
+          onClick={handleAddAnchor}
+          disabled={!currentPdfId}
+        >
           <Pin size={14} /> Add Anchor
         </Button>
       </div>
@@ -132,7 +216,7 @@ export function ProviderProfileSection() {
             </tr>
           </thead>
           <tbody>
-            {provider.anchors.map((anchor) => (
+            {selectedAnchors.map((anchor) => (
               <tr key={anchor.id}>
                 <td data-label="Anchor Text">
                   <code>{anchor.text}</code>
@@ -162,10 +246,17 @@ export function ProviderProfileSection() {
                 </td>
               </tr>
             ))}
-            {provider.anchors.length === 0 && (
+            {selectedAnchors.length === 0 && currentPdfId && (
               <tr>
                 <td colSpan={4} className="text-center text-[#8b949e] py-8">
-                  No anchors configured. Click "Add Anchor" to create one.
+                  No anchors for this PDF. Click "Add Anchor" to create one.
+                </td>
+              </tr>
+            )}
+            {!currentPdfId && provider.pdfs.length > 0 && (
+              <tr>
+                <td colSpan={4} className="text-center text-[#8b949e] py-8">
+                  Please select a PDF above to view its anchors.
                 </td>
               </tr>
             )}
@@ -174,14 +265,15 @@ export function ProviderProfileSection() {
       </div>
 
       {/* Anchor Modal */}
-      {currentProviderId && (
+      {currentPdfId && (
         <AnchorModal
           isOpen={showAnchorModal}
           onClose={() => {
             setShowAnchorModal(false);
             setEditingAnchorId(null);
           }}
-          providerId={currentProviderId}
+          providerId={currentProviderId || ''}
+          pdfId={currentPdfId}
           editAnchorId={editingAnchorId}
         />
       )}
@@ -197,13 +289,14 @@ export function ProviderProfileSection() {
         itemName="Anchor"
       />
 
-      {/* Preview Modal - Fetches PDF from backend storage */}
+      {/* Preview Modal - Uses pdfId */}
       <PreviewModal
         isOpen={showPreviewModal}
         onClose={() => {
           setShowPreviewModal(false);
           setPreviewAnchor(null);
         }}
+        pdfId={currentPdfId}
         providerId={currentProviderId}
         anchor={previewAnchor}
         totalPages={pdfTotalPages}

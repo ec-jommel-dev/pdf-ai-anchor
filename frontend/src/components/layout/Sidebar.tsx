@@ -6,10 +6,12 @@
 'use client';
 
 import { 
-  Shield, 
+  Crosshair, 
+  LayoutDashboard,
   UploadCloud, 
   Zap, 
-  Users, 
+  Radio,
+  FileOutput,
   Moon, 
   Sun 
 } from 'lucide-react';
@@ -24,9 +26,11 @@ interface SidebarProps {
 }
 
 const navItems: { id: TabType; label: string; icon: React.ReactNode }[] = [
+  { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
   { id: 'upload', label: 'Contract Mapper', icon: <UploadCloud size={18} /> },
   { id: 'autofill', label: 'Auto Fill Anchor', icon: <Zap size={18} /> },
-  { id: 'list', label: 'Provider List', icon: <Users size={18} /> },
+  { id: 'list', label: 'Provider List', icon: <Radio size={18} /> },
+  { id: 'converter', label: 'Word to PDF', icon: <FileOutput size={18} /> },
 ];
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
@@ -51,8 +55,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     >
       {/* Logo - Desktop Only */}
       <div className="flex items-center gap-2.5 font-semibold text-[var(--text-heading)] mb-6 desktop-only">
-        <Shield size={20} />
-        <span>ProviderHub</span>
+        <Crosshair size={20} className="text-[var(--gh-green)]" />
+        <span>PDF Anchor Mapper</span>
       </div>
 
       {/* Navigation */}

@@ -1,5 +1,6 @@
 """
 Anchor Model - Anchor settings for PDF text placement
+Now belongs to PDF (not directly to Provider)
 """
 from database import db
 from datetime import datetime
@@ -8,7 +9,7 @@ class Anchor(db.Model):
     __tablename__ = 'anchor_settings'
     
     id = db.Column(db.Integer, primary_key=True)
-    provider_id = db.Column(db.Integer, db.ForeignKey('providers.id'), nullable=False)
+    pdf_id = db.Column(db.Integer, db.ForeignKey('provider_pdfs.id'), nullable=False)  # Changed from provider_id
     text = db.Column(db.String(255), nullable=False)  # e.g., "{{signature}}"
     x = db.Column(db.Integer, nullable=False)  # X coordinate
     y = db.Column(db.Integer, nullable=False)  # Y coordinate
@@ -22,6 +23,7 @@ class Anchor(db.Model):
         """Convert anchor to dictionary for JSON response"""
         return {
             'id': self.id,
+            'pdfId': self.pdf_id,
             'text': self.text,
             'x': self.x,
             'y': self.y,

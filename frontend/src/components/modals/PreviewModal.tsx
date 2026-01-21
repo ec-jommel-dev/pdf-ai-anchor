@@ -1,7 +1,8 @@
 /**
  * PHASE 9.4: Preview Modal Component
  * Full-screen preview of anchor location on PDF page
- * - Fetches PDF from backend storage (not browser memory)
+ * - Fetches PDF from backend storage by pdfId
+ * Updated: Uses pdfId for multiple PDFs per provider
  */
 
 'use client';
@@ -22,7 +23,8 @@ const RENDER_SCALE = 2.0;
 interface PreviewModalProps {
   isOpen: boolean;
   onClose: () => void;
-  providerId: string | null;
+  pdfId: number | null;      // Primary: fetch PDF by pdfId
+  providerId?: string | null; // Fallback: legacy support
   anchor: Anchor | null;
   totalPages: number;
 }
@@ -30,6 +32,7 @@ interface PreviewModalProps {
 export function PreviewModal({ 
   isOpen, 
   onClose, 
+  pdfId,
   providerId, 
   anchor,
   totalPages 
@@ -41,14 +44,24 @@ export function PreviewModal({
   const [error, setError] = useState<string | null>(null);
 
   const renderPreview = useCallback(async () => {
-    if (!providerId || !anchor || !canvasRef.current) return;
+    // Need either pdfId or providerId (legacy)
+    if ((!pdfId && !providerId) || !anchor || !canvasRef.current) return;
 
     setIsLoading(true);
     setError(null);
 
     try {
-      // Fetch PDF from backend storage
-      const pdfData = await pdfAPI.download(providerId);
+      // Fetch PDF from backend storage (prefer pdfId, fallback to providerId)
+      let pdfData: ArrayBuffer;
+      
+      if (pdfId) {
+        pdfData = await pdfAPI.download(pdfId);
+      } else if (providerId) {
+        // Legacy fallback
+        pdfData = await pdfAPI.downloadByProvider(providerId);
+      } else {
+        throw new Error('No PDF identifier provided');
+      }
       
       // Dynamic import of PDF.js
       if (!pdfjsLib) {
@@ -123,13 +136,13 @@ export function PreviewModal({
         }, 500);
       }, 100);
     }
-  }, [providerId, anchor, totalPages]);
+  }, [pdfId, providerId, anchor, totalPages]);
 
   useEffect(() => {
-    if (isOpen && providerId && anchor) {
+    if (isOpen && (pdfId || providerId) && anchor) {
       renderPreview();
     }
-  }, [isOpen, providerId, anchor, renderPreview]);
+  }, [isOpen, pdfId, providerId, anchor, renderPreview]);
 
   if (!anchor) return null;
 

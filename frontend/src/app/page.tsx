@@ -8,10 +8,12 @@
 
 import { useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
+import { DashboardSection } from '@/components/sections/DashboardSection';
 import { ContractMapperSection } from '@/components/sections/ContractMapperSection';
 import { AutoFillSection } from '@/components/sections/AutoFillSection';
 import { ProviderListSection } from '@/components/sections/ProviderListSection';
 import { ProviderProfileSection } from '@/components/sections/ProviderProfileSection';
+import { ConverterSection } from '@/components/sections/ConverterSection';
 import { Toast } from '@/components/ui/Toast';
 import { useProviderStore } from '@/stores/useProviderStore';
 
@@ -49,9 +51,11 @@ export default function Home() {
       />
 
       {/* Render active section based on navigation state */}
+      {activeTab === 'dashboard' && <DashboardSection />}
       {activeTab === 'upload' && <ContractMapperSection />}
       {activeTab === 'autofill' && <AutoFillSection />}
       {activeTab === 'list' && <ProviderListSection />}
+      {activeTab === 'converter' && <ConverterSection />}
       {activeTab === 'profile' && <ProviderProfileSection />}
     </MainLayout>
   );
